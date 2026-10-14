@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Framework/appcompat theme, no Material dependency. -->
+    <style name="Theme.Chorus" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/black</item>
+    </style>
+
+    <!-- Cycle mode: high-contrast light theme for direct sunlight readability.
+         Selected at runtime by MainActivity via setTheme(). -->
+    <style name="Theme.Chorus.Cycle" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:textColorPrimary">@android:color/black</item>
+    </style>
+</resources>

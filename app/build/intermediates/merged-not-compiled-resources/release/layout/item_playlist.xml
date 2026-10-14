@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Row for one playlist: a small circular "glyph" badge (a TextView with a shape
+  background set in PlaylistAdapter — no image asset), the name, and a muted
+  chevron. No track count is shown because the adapter is only handed (id, name).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="60dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:baselineAligned="false"
+    android:background="?android:attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:paddingStart="16dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <TextView
+        android:id="@+id/glyph"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:text="&#9835;"
+        android:textSize="17sp"
+        android:includeFontPadding="false"
+        android:textColor="?android:attr/textColorSecondary"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="14dp"
+        android:textSize="16sp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:textColor="?android:attr/textColorPrimary" />
+
+    <TextView
+        android:id="@+id/chevron"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:text="&#8250;"
+        android:textSize="20sp"
+        android:includeFontPadding="false"
+        android:textColor="?android:attr/textColorSecondary"
+        android:importantForAccessibility="no" />
+</LinearLayout>

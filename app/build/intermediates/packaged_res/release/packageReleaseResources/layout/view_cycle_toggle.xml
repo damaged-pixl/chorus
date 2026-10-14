@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings row: cycle mode switch plus a one-line explanation of what it changes. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:minHeight="48dp"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="16dp"
+    android:paddingBottom="8dp">
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/cycle_switch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:text="Cycle mode"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/cycle_caption"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:alpha="0.85"
+        android:text="Big buttons, high contrast"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="12sp" />
+
+</LinearLayout>
