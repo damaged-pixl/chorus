@@ -29,7 +29,8 @@ import com.bee.chorus.data.Track
  * fields and hands a cache key to [Art].
  */
 class TrackAdapter(
-    var onClick: ((Int, List<Track>) -> Unit)? = null
+    var onClick: ((Int, List<Track>) -> Unit)? = null,
+    var onLongClick: ((Track) -> Unit)? = null
 ) : RecyclerView.Adapter<TrackAdapter.VH>() {
 
     private val items = ArrayList<Track>()
@@ -67,6 +68,16 @@ class TrackAdapter(
             itemView.setOnClickListener {
                 val p = bindingAdapterPosition
                 if (p != RecyclerView.NO_POSITION) onClick?.invoke(p, items)
+            }
+            // Set once like the click listener; returns the bound Track at gesture time.
+            itemView.setOnLongClickListener {
+                val p = bindingAdapterPosition
+                if (p != RecyclerView.NO_POSITION && onLongClick != null) {
+                    items.getOrNull(p)?.let { onLongClick?.invoke(it) }
+                    true
+                } else {
+                    false
+                }
             }
         }
 

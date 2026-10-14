@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.7 MB** (R8 + resource shrinking). No Compose, no Material, no DI
+**Release APK: ~1.8 MB** (R8 + resource shrinking). No Compose, no Material, no DI
 framework, no analytics, no crash reporting, no ads, **no INTERNET permission** — the
 app cannot phone home even if it wanted to.
 
@@ -36,6 +36,9 @@ APK when you care about size.
 Background playback with a media notification and lock-screen/Bluetooth controls,
 tracks + albums browse, live search, playlists (local SQLite), queue with shuffle and
 repeat (off / all / one), full-screen player with seek, mini player.
+
+Playlists are fully editable: long-press a track or album row to add it to an existing
+or new playlist, and long-press a saved playlist to rename or delete it.
 
 **Cycle mode** (Setup tab) — for use on a bike. Switches to a bright high-contrast
 theme for direct sunlight and enlarges every touch target to 72dp for gloved hands.
@@ -75,8 +78,6 @@ mini player and the full player can never drift apart.
 
 ## Not done
 
-- Add-to-playlist from a track/album, and rename/delete playlist UI. `PlaylistStore`
-  already has `addTracks`/`renamePlaylist`/`deletePlaylist` — only the UI is missing.
 - Cycle mode's light theme does not reach the full-screen `PlayerActivity` (it stays
   dark by design so the artwork backdrop reads).
 - No gapless/crossfade, sleep timer, or playback speed.

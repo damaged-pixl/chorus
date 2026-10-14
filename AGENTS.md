@@ -1,7 +1,7 @@
 # Chorus — agent notes
 
 Tiny, fully local Android music player (package `com.bee.chorus`). Plays audio already
-on the phone, nothing else. Release APK ~1.7 MB with R8. `README.md` is the fuller
+on the phone, nothing else. Release APK ~1.8 MB with R8. `README.md` is the fuller
 overview; this file is the quick reference for agents working here.
 
 ## Non-negotiable invariants
@@ -19,16 +19,19 @@ overview; this file is the quick reference for agents working here.
 - **Never put full-size bitmaps in lists.** `Art` has one shared 2-thread pool, an
   LruCache (heap/8), size-based subsampling, and a negative cache for artless albums.
   Keep list binds on the bounded path.
-- **Check the *release* APK size after changes** (`~1.7 MB` is the baseline). Debug
-  builds are ~8.7 MB and meaningless for size. A dependency or asset regression shows
-  up here first.
+- **Check the *release* APK size after changes** (`~1.8 MB` / 1,849,450 bytes is the
+  baseline as of 2026-10-14). Debug builds are ~8.7 MB and meaningless for size. A
+  dependency or asset regression shows up here first — this is the primary guard
+  against feature creep into the thin stack.
 
 ## Stack
 
-Kotlin 2.1.0 / AGP 8.7.3, minSdk 26, targetSdk 36, Java 17. View-based UI (framework
-widgets + appcompat + RecyclerView, shapes/gradients drawn in code — zero image assets).
-Plain `SQLiteOpenHelper` (no Room) for playlists (`playlists.db`). Media3 1.5.1 for
-playback + MediaSession. Not a git repo (as of 2026-10-14).
+AGP 9.4.1 with **built-in Kotlin** (Kotlin 2.4.21, no separate `kotlin-android`
+plugin), Gradle 9.6.0, compileSdk 37, minSdk 26, targetSdk 36, Java 17. View-based UI
+(framework widgets + appcompat + RecyclerView, shapes/gradients drawn in code — zero
+image assets). Plain `SQLiteOpenHelper` (no Room) for playlists (`playlists.db`).
+Media3 1.11.1 for playback + MediaSession. Is a git repo (since 2026-10-14); build
+outputs (`.gradle/`, `app/build/`, `local.properties`) are ignored — never commit them.
 
 ## Build / install
 
@@ -67,12 +70,21 @@ mini and full player can't drift. Never create a second controller.
   `onDestroy`, or `recreate()` leaks it.
 - Playlist DB `onUpgrade` is a no-op (v1, no migrations yet). If you bump the version,
   write a real migration.
+- **Kotlin 2.4 removed `kotlinOptions {}`** and AGP 9's built-in Kotlin derives
+  `jvmTarget` from `compileOptions.targetCompatibility` (17) automatically. Don't add a
+  `kotlin { compilerOptions {} }` block — it's redundant here.
+- **The three list adapters (`TrackAdapter`, `AlbumAdapter`, `PlaylistAdapter`) each take
+  an `onClick` and an `onLongClick` as their last constructor params.** Always construct
+  with a *named* `onClick = { ... }` argument (or set the property), never a bare trailing
+  lambda — a trailing lambda silently binds to `onLongClick` instead. This bit the build
+  once already.
+- `compileSdk 37` (API 37) needs the **`platforms;android-37.0`** SDK package, not
+  `android-37` (which doesn't resolve). The installed cmdline-tools was too old to list it
+  and needed updating first.
 - British English in user-facing strings.
 
 ## Known gaps (backlog, not bugs)
 
-- Add-to-playlist UI and rename/delete playlist UI are missing — `PlaylistStore`
-  already has `addTracks`/`renamePlaylist`/`deletePlaylist`; only the UI is missing.
 - Cycle mode's light theme doesn't reach `PlayerActivity` (stays dark by design so the
   artwork backdrop reads).
 - No gapless/crossfade, sleep timer, or playback speed.

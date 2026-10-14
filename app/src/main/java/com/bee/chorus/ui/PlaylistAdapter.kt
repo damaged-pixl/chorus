@@ -22,7 +22,8 @@ import com.bee.chorus.R
  * else. Tapping fires [onClick] with the id and name.
  */
 class PlaylistAdapter(
-    var onClick: ((Long, String) -> Unit)? = null
+    var onClick: ((Long, String) -> Unit)? = null,
+    var onLongClick: ((Long, String) -> Unit)? = null
 ) : RecyclerView.Adapter<PlaylistAdapter.VH>() {
 
     private val items = ArrayList<Pair<Long, String>>()
@@ -57,6 +58,17 @@ class PlaylistAdapter(
             itemView.setOnClickListener {
                 val p = bindingAdapterPosition
                 if (p != RecyclerView.NO_POSITION) items[p]?.let { onClick?.invoke(it.first, it.second) }
+            }
+            // Long-press opens the Rename/Delete sheet; resolves its own position like
+            // the click handler so it needs no re-binding.
+            itemView.setOnLongClickListener {
+                val p = bindingAdapterPosition
+                if (p != RecyclerView.NO_POSITION && onLongClick != null) {
+                    items.getOrNull(p)?.let { onLongClick?.invoke(it.first, it.second) }
+                    true
+                } else {
+                    false
+                }
             }
         }
 

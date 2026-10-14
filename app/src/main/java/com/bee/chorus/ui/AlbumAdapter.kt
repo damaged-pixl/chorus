@@ -29,7 +29,8 @@ import com.bee.chorus.data.Album
  * and the artwork shape are built once per recycled ViewHolder.
  */
 class AlbumAdapter(
-    var onClick: ((Album) -> Unit)? = null
+    var onClick: ((Album) -> Unit)? = null,
+    var onLongClick: ((Album) -> Unit)? = null
 ) : RecyclerView.Adapter<AlbumAdapter.VH>() {
 
     private val items = ArrayList<Album>()
@@ -66,6 +67,16 @@ class AlbumAdapter(
             itemView.setOnClickListener {
                 val p = bindingAdapterPosition
                 if (p != RecyclerView.NO_POSITION) items[p]?.let { onClick?.invoke(it) }
+            }
+            // Set once like the click listener; returns the bound Album at gesture time.
+            itemView.setOnLongClickListener {
+                val p = bindingAdapterPosition
+                if (p != RecyclerView.NO_POSITION && onLongClick != null) {
+                    items.getOrNull(p)?.let { onLongClick?.invoke(it) }
+                    true
+                } else {
+                    false
+                }
             }
         }
 

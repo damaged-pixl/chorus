@@ -5,9 +5,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -144,25 +146,39 @@ class MainActivity : AppCompatActivity() {
     // ---------- wiring ----------
 
     private fun wireLists() {
-        trackAdapter = TrackAdapter { index, list -> PlayerHolder.play(list, index) }
-        albumAdapter = AlbumAdapter { album ->
+        // Named onClick: keeps the trailing-lambda-from-hell from ever rebinding to
+        // onLongClick (both are trailing-parameter candidates). onLongClick is set below.
+        trackAdapter = TrackAdapter(onClick = { index, list -> PlayerHolder.play(list, index) })
+        // Named onClick here too: AlbumAdapter gained an onLongClick parameter, so a bare
+        // trailing lambda would bind to onLongClick instead of onClick.
+        albumAdapter = AlbumAdapter(onClick = { album ->
             val tracks = library.filter { it.albumId == album.id }
                 .sortedBy { it.trackNo }
             PlayerHolder.play(tracks, 0)
-        }
-        playlistAdapter = PlaylistAdapter { id, name -> openPlaylist(id, name) }
+        })
+        // Named onClick: PlaylistAdapter gained onLongClick, so a positional lambda
+        // would bind to onLongClick instead of onClick.
+        playlistAdapter = PlaylistAdapter(onClick = { id, name -> openPlaylist(id, name) })
 
         findViewById<RecyclerView>(R.id.track_list).apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = trackAdapter
+            trackAdapter.onLongClick = { track -> addToPlaylistDialog(listOf(track)) }
         }
         findViewById<RecyclerView>(R.id.album_list).apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = albumAdapter
+            albumAdapter.onLongClick = { album ->
+                // Same ordering the click-to-play uses, so the playlist matches play order.
+                addToPlaylistDialog(
+                    library.filter { it.albumId == album.id }.sortedBy { it.trackNo }
+                )
+            }
         }
         findViewById<RecyclerView>(R.id.playlist_list).apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = playlistAdapter
+            playlistAdapter.onLongClick = { id, name -> playlistOptionsDialog(id, name) }
         }
 
         playlistPanel = findViewById(R.id.playlist_panel)
@@ -196,6 +212,144 @@ class MainActivity : AppCompatActivity() {
     private fun openPlaylist(id: Long, name: String) {
         playlistPanel.open(id, name)
         show(R.id.playlist_panel)
+    }
+
+    // ---------- playlist editing ----------
+
+    /**
+     * Add-to-playlist chooser for a long-press on a track or album row. Each row carries the
+     * tracks it represents, so a long-pressed album appends its whole (play-ordered) track set
+     * in one go. A "+ New playlist" row at the top creates a playlist and adds to it immediately.
+     */
+    private fun addToPlaylistDialog(tracks: List<Track>) {
+        if (tracks.isEmpty()) {
+            Toast.makeText(this, "No tracks to add", Toast.LENGTH_SHORT).show()
+            return
+        }
+        io.execute {
+            val existing = store.listPlaylists()
+            runOnUiThread {
+                // "0" is the synthetic new-playlist row; 1..n are the real playlists.
+                val labels = ArrayList<String>(existing.size + 1)
+                labels.add("+ New playlist")
+                for ((_, name) in existing) labels.add(name.ifBlank { "Untitled playlist" })
+
+                AlertDialog.Builder(this)
+                    .setTitle(
+                        if (tracks.size == 1) "Add \"${tracks[0].title}\" to"
+                        else "Add ${tracks.size} tracks to"
+                    )
+                    .setItems(labels.toTypedArray()) { _, which ->
+                        if (which == 0) createPlaylistThenAdd(tracks)
+                        else {
+                            val (id, _) = existing[which - 1]
+                            addTracksTo(id, tracks)
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
+    }
+
+    /** Name a new playlist, then add the waiting tracks to it. */
+    private fun createPlaylistThenAdd(tracks: List<Track>) {
+        val input = EditText(this).apply {
+            hint = "Playlist name"
+            // Give the keyboard a stable field; the dialog below has no view of its own.
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+        AlertDialog.Builder(this)
+            .setTitle("New playlist")
+            .setView(input)
+            .setPositiveButton("Create") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    io.execute {
+                        val id = store.createPlaylist(name)
+                        store.addTracks(id, tracks.map { it.id })
+                        runOnUiThread { refreshPlaylists() }
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun addTracksTo(playlistId: Long, tracks: List<Track>) {
+        io.execute {
+            store.addTracks(playlistId, tracks.map { it.id })
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    if (tracks.size == 1) "Added to playlist"
+                    else "Added ${tracks.size} tracks",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    /** Long-press options for a saved playlist: rename or delete. */
+    private fun playlistOptionsDialog(id: Long, name: String) {
+        val label = name.ifBlank { "Untitled playlist" }
+        val options = arrayOf("Rename", "Delete")
+        AlertDialog.Builder(this)
+            .setTitle(label)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> renamePlaylistDialog(id, label)
+                    1 -> confirmDeletePlaylist(id, label)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun renamePlaylistDialog(id: Long, current: String) {
+        val input = EditText(this).apply { setText(current) }
+        AlertDialog.Builder(this)
+            .setTitle("Rename playlist")
+            .setView(input)
+            .setPositiveButton("Rename") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    io.execute {
+                        store.renamePlaylist(id, name)
+                        runOnUiThread {
+                            refreshPlaylists()
+                            // Keep an open detail header in step with the new name.
+                            if (playlistPanel.currentPlaylistId() == id) {
+                                playlistPanel.open(id, name)
+                            }
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun confirmDeletePlaylist(id: Long, name: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete playlist")
+            .setMessage("\"$name\" will be removed. The music files stay on this phone.")
+            .setPositiveButton("Delete") { _, _ ->
+                io.execute {
+                    store.deletePlaylist(id)
+                    runOnUiThread {
+                        // If the deleted playlist is on screen, fall back to the list.
+                        if (playlistPanel.currentPlaylistId() == id) {
+                            playlistPanel.close()
+                            show(R.id.playlist_home)
+                        }
+                        refreshPlaylists()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun wireTabs() {
