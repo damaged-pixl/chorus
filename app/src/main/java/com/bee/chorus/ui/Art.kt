@@ -61,9 +61,13 @@ object Art {
     /** Keys already known to have no art, so we stop re-hitting the provider for them. */
     private val noArt = HashSet<String>()
 
-    /** Load [uri] into [iv] at roughly [targetPx]; cancels via the view's tag. */
-    fun load(ctx: Context, iv: ImageView, uri: Uri, targetPx: Int = 256) {
-        val key = "$uri@$targetPx"
+    /** Load [uri] into [iv] at roughly [targetPx]; cancels via the view's tag.
+     *
+     *  [lowMem] is for list thumbnails: it decodes as RGB_565 (half the bitmap RAM of
+     *  ARGB_8888) on both decode paths, and it is part of the cache key so the
+     *  full-quality player art never shares a low-mem entry. */
+    fun load(ctx: Context, iv: ImageView, uri: Uri, targetPx: Int = 256, lowMem: Boolean = false) {
+        val key = "$uri@$targetPx" + if (lowMem) "#low" else ""
         iv.setTag(R.id.art_tag, key)
 
         val hit = cache.get(key)
@@ -78,7 +82,7 @@ object Art {
 
         val appContext = ctx.applicationContext
         io.execute {
-            val bmp = decode(appContext, uri, targetPx)
+            val bmp = decode(appContext, uri, targetPx, lowMem)
             if (bmp == null) {
                 synchronized(noArt) { noArt.add(key) }
             } else {
@@ -92,7 +96,7 @@ object Art {
         }
     }
 
-    private fun decode(ctx: Context, uri: Uri, targetPx: Int): Bitmap? {
+    private fun decode(ctx: Context, uri: Uri, targetPx: Int, lowMem: Boolean): Bitmap? {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 // A plain open — deliberately NOT loadThumbnail(). With no EXTRA_SIZE
@@ -103,6 +107,9 @@ object Art {
                     ctx.contentResolver.openTypedAssetFileDescriptor(uri, "image/*", null)
                 })
                 ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                    // LOW_RAM lets the decoder use RGB_565 for opaque images — the
+                    // memory budget for list thumbnails (full quality stays default).
+                    if (lowMem) decoder.setMemorySizePolicy(ImageDecoder.MEMORY_POLICY_LOW_RAM)
                     var sample = 1
                     while (info.size.width / sample > targetPx || info.size.height / sample > targetPx) {
                         sample *= 2
@@ -119,7 +126,10 @@ object Art {
                 while (opt.outWidth / sample > targetPx || opt.outHeight / sample > targetPx) {
                     sample *= 2
                 }
-                val opt2 = BitmapFactory.Options().apply { inSampleSize = sample }
+                val opt2 = BitmapFactory.Options().apply {
+                    inSampleSize = sample
+                    if (lowMem) inPreferredConfig = Bitmap.Config.RGB_565
+                }
                 ctx.contentResolver.openInputStream(uri)?.use {
                     BitmapFactory.decodeStream(it, null, opt2)
                 }

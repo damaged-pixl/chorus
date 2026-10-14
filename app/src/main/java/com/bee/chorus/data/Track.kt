@@ -14,8 +14,7 @@ data class Track(
     val albumId: Long,
     val durationMs: Int,
     val trackNo: Int,
-    val year: Int,
-    val path: String
+    val year: Int
 ) : Parcelable {
     val uri: Uri get() = ContentUris.withAppendedId(Library.TRACKS_URI, id)
     val albumArtUri: Uri get() = ContentUris.withAppendedId(Library.ALBUM_ART_URI, albumId)

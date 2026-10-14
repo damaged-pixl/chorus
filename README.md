@@ -3,7 +3,8 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.8 MB** (R8 + resource shrinking). No Compose, no Material, no DI
+**Release APK: ~1.6 MB** (1,614,627 bytes — R8 full mode, English-only locales,
+resource shrinking). No Compose, no Material, no DI
 framework, no analytics, no crash reporting, no ads, **no INTERNET permission** — the
 app cannot phone home even if it wanted to.
 

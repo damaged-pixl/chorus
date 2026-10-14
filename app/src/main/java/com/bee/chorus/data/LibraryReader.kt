@@ -22,8 +22,9 @@ class LibraryReader(private val context: Context) {
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.TRACK,
-            MediaStore.Audio.Media.YEAR,
-            MediaStore.Audio.Media.DATA
+            MediaStore.Audio.Media.YEAR
+            // DATA (file path) deliberately not fetched: playback goes through the
+            // content:// URI, and the path was never read anywhere.
         )
         // Only real music files, skip podcasts/short clips/ringtones.
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
@@ -44,7 +45,6 @@ class LibraryReader(private val context: Context) {
         val durC = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
         val trackC = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
         val yearC = c.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
-        val dataC = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
 
         val UNKNOWN_ARTIST = "<unknown>"
 
@@ -70,8 +70,7 @@ class LibraryReader(private val context: Context) {
                     durationMs = duration,
                     // TRACK encodes disc in the thousands (1002 = disc 1, track 2).
                     trackNo = (c.getInt(trackC) % 1000).coerceAtLeast(0),
-                    year = c.getInt(yearC),
-                    path = c.getString(dataC).orEmpty()
+                    year = c.getInt(yearC)
                 )
             )
         }

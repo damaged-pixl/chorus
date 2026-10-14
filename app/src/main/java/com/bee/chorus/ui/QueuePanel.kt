@@ -250,7 +250,10 @@ class QueuePanel @JvmOverloads constructor(
 
                 val uri = row.artworkUri
                 if (uri != null) {
-                    Art.load(itemView.context, art, uri, 128)
+                    // lowMem=true keeps this identical to the track list's decode, so the
+                    // two share one Art cache entry (same uri@128#low key) instead of
+                    // holding a full-quality copy each.
+                    Art.load(itemView.context, art, uri, 128, lowMem = true)
                 } else {
                     art.setImageDrawable(null)
                 }

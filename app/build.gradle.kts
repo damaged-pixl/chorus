@@ -41,6 +41,26 @@ android {
         }
     }
 
+    // Ship English only: appcompat/core/Media3 bundle ~70 locale translations and
+    // resources.arsc was one of the APK's biggest entries (AGP 9 replacement for the
+    // removed resConfigs("en")).
+    androidResources {
+        localeFilters += "en"
+    }
+
+    packaging {
+        resources {
+            // Third-party licence/notice texts are legal text, never read at runtime
+            // (~20 KB). Deliberately narrow: only LICENSE/NOTICE .txt under META-INF.
+            excludes += setOf(
+                "META-INF/**/LICENSE.txt",
+                "META-INF/**/NOTICE.txt",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE.txt"
+            )
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

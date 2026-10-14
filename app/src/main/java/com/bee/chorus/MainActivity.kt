@@ -52,6 +52,13 @@ class MainActivity : AppCompatActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private var cycle = false
 
+    // One RecycledViewPool shared by the three main lists, so row views survive tab
+    // switches instead of being torn down per list. Safe to share because each adapter
+    // reports its own view type (see getItemViewType in Track/Album/PlaylistAdapter) —
+    // the pool is keyed by view type alone and would otherwise hand a row of one
+    // layout to a list that inflates another.
+    private val sharedViewPool = RecyclerView.RecycledViewPool()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Cycle mode changes the theme, so it must be applied before any inflation.
         cycle = Settings.isCycleMode(this)
@@ -161,11 +168,17 @@ class MainActivity : AppCompatActivity() {
         playlistAdapter = PlaylistAdapter(onClick = { id, name -> openPlaylist(id, name) })
 
         findViewById<RecyclerView>(R.id.track_list).apply {
+            setRecycledViewPool(sharedViewPool)
+            // Every row is the same height (art block + fixed padding dominate), and the
+            // list fills its parent, so adapter changes never resize the view.
+            setHasFixedSize(true)
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = trackAdapter
             trackAdapter.onLongClick = { track -> addToPlaylistDialog(listOf(track)) }
         }
         findViewById<RecyclerView>(R.id.album_list).apply {
+            setRecycledViewPool(sharedViewPool)
+            setHasFixedSize(true)
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = albumAdapter
             albumAdapter.onLongClick = { album ->
@@ -176,6 +189,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
         findViewById<RecyclerView>(R.id.playlist_list).apply {
+            setRecycledViewPool(sharedViewPool)
+            setHasFixedSize(true)
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = playlistAdapter
             playlistAdapter.onLongClick = { id, name -> playlistOptionsDialog(id, name) }

@@ -19,8 +19,9 @@ overview; this file is the quick reference for agents working here.
 - **Never put full-size bitmaps in lists.** `Art` has one shared 2-thread pool, an
   LruCache (heap/8), size-based subsampling, and a negative cache for artless albums.
   Keep list binds on the bounded path.
-- **Check the *release* APK size after changes** (`~1.8 MB` / 1,849,450 bytes is the
-  baseline as of 2026-10-14). Debug builds are ~8.7 MB and meaningless for size. A
+- **Check the *release* APK size after changes** (`~1.6 MB` / 1,614,627 bytes is the
+  baseline as of 2026-10-14, down from 1,849,450 via `localeFilters += "en"` + META-INF
+  licence excludes). Debug builds are ~8.7 MB and meaningless for size. A
   dependency or asset regression shows up here first — this is the primary guard
   against feature creep into the thin stack.
 

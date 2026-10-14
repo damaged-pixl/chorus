@@ -77,7 +77,12 @@ class PlaylistAdapter(
         }
     }
 
+    // Distinct view type: MainActivity shares one RecycledViewPool across the three
+    // main lists and the pool is keyed by view type only — see TrackAdapter.
+    override fun getItemViewType(position: Int) = VIEW_TYPE
+
     private companion object {
+        const val VIEW_TYPE = 3
         const val UNNAMED = "Untitled playlist"
 
         /** Circular badge fill: a hair off the window background in either theme. */

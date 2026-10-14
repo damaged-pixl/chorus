@@ -92,11 +92,18 @@ class TrackAdapter(
             subtitle.visibility = if (detail.isEmpty()) View.GONE else View.VISIBLE
 
             duration.text = formatDuration(t.durationMs)
-            Art.load(itemView.context, art, t.albumArtUri, ART_PX)
+            Art.load(itemView.context, art, t.albumArtUri, ART_PX, lowMem = true)
         }
     }
 
+    // Distinct view type: MainActivity shares one RecycledViewPool across the three
+    // main lists and the pool is keyed by view type only — reporting 0 like every
+    // other adapter would let a recycled row reach a list that inflates another
+    // layout (ClassCastException at bind time).
+    override fun getItemViewType(position: Int) = VIEW_TYPE
+
     private companion object {
+        const val VIEW_TYPE = 1
         /** Decode target for the 52dp thumbnail. 128px is what QueuePanel uses for this
          *  same layout, so both share Art's cache entry instead of holding two copies. */
         const val ART_PX = 128

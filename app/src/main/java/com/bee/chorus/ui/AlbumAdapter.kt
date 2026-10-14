@@ -89,11 +89,16 @@ class AlbumAdapter(
             subtitle.text = detail
             subtitle.visibility = if (detail.isEmpty()) View.GONE else View.VISIBLE
 
-            Art.load(itemView.context, art, a.artUri, ART_PX)
+            Art.load(itemView.context, art, a.artUri, ART_PX, lowMem = true)
         }
     }
 
+    // Distinct view type: MainActivity shares one RecycledViewPool across the three
+    // main lists and the pool is keyed by view type only — see TrackAdapter.
+    override fun getItemViewType(position: Int) = VIEW_TYPE
+
     private companion object {
+        const val VIEW_TYPE = 2
         /** Decode target for the 64dp album thumbnail — enough for 3x screens without
          *  holding a near-full-resolution bitmap (the previous 256 was ~2x oversized). */
         const val ART_PX = 192
