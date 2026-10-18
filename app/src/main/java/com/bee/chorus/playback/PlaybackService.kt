@@ -67,12 +67,20 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
-        statsIo.shutdown()
+        // Player first: releasing it is what stops media-item transitions, so no new
+        // stats writes can race the executor shutdown below. Doing it the other way round
+        // left a transition firing onMediaItemTransition into a shut-down executor.
         mediaSession?.run {
             player.release()
             release()
         }
         mediaSession = null
+        // shutdownNow, not shutdown: a write already queued must not outlive the store
+        // it is about to use.
+        statsIo.shutdownNow()
+        // Only reachable from a service that recorded at least one play, but close() on a
+        // never-opened SQLiteOpenHelper is a no-op, so this needs no guard.
+        statsStore.close()
         super.onDestroy()
     }
 
