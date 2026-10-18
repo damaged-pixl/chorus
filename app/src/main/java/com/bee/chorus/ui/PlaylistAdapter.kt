@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -88,9 +87,9 @@ class PlaylistAdapter(
         const val VIEW_TYPE = 3
         const val UNNAMED = "Untitled playlist"
 
-        /** Circular badge fill: a hair off the window background in either theme. */
+        /** Circular badge fill: a hair off the themed page background, either way round. */
         fun badgeFill(ctx: Context): GradientDrawable {
-            val base = themeColor(ctx, android.R.attr.colorBackground, Color.BLACK)
+            val base = Theming.color(ctx, R.attr.chorusBg)
             val fill = if (ColorUtils.calculateLuminance(base) > 0.5f) {
                 ColorUtils.blendARGB(base, Color.BLACK, 0.08f)
             } else {
@@ -100,13 +99,6 @@ class PlaylistAdapter(
                 shape = GradientDrawable.OVAL
                 setColor(fill)
             }
-        }
-
-        fun themeColor(ctx: Context, attr: Int, fallback: Int): Int {
-            val out = TypedValue()
-            val resolved = ctx.theme.resolveAttribute(attr, out, true) &&
-                out.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT
-            return if (resolved) out.data else fallback
         }
     }
 }

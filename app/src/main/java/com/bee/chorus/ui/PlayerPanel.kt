@@ -26,6 +26,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.bee.chorus.R
 import com.bee.chorus.data.Favourites
+import com.bee.chorus.data.Settings
 import com.bee.chorus.playback.PlayerHolder
 import com.bee.chorus.playback.SleepTimer
 import java.util.Locale
@@ -56,6 +57,7 @@ class PlayerPanel @JvmOverloads constructor(
     private val seekBar: SeekBar
     private val elapsedView: TextView
     private val totalView: TextView
+    private val cycleButton: TextView
     private val sleepButton: TextView
     private val prevButton: TextView
     private val rewindButton: TextView
@@ -70,13 +72,25 @@ class PlayerPanel @JvmOverloads constructor(
 
     // Drawables are built once and re-used, so state changes never allocate. Each instance is
     // owned by exactly one view — a Drawable must never be shared between two views.
-    private val shuffleIdleBg = pill(0x1FFFFFFF, BORDER_IDLE)
-    private val shuffleOnBg = pill(0x66FFC107, 0)
-    private val repeatIdleBg = pill(0x1FFFFFFF, BORDER_IDLE)
-    private val repeatAllBg = pill(0x66FFC107, 0)
-    private val repeatOneBg = pill(ACCENT, 0)
-    private val starIdleBg = pill(0x1FFFFFFF, BORDER_IDLE)
-    private val starOnBg = pill(0x66FFC107, 0)
+    // Assigned in init (not as field initialisers) because they need the Activity theme,
+    // which is only final once onCreate has chosen it.
+    private val shuffleIdleBg: Drawable
+    private val shuffleOnBg: Drawable
+    private val repeatIdleBg: Drawable
+    private val repeatAllBg: Drawable
+    private val repeatOneBg: Drawable
+    private val starIdleBg: Drawable
+    private val starOnBg: Drawable
+    private val cycleIdleBg: Drawable
+    private val cycleOnBg: Drawable
+
+    // Design tokens, resolved once per inflation. A theme change always arrives as an
+    // Activity recreation (system uiMode, or recreate() from the cycle toggle), so these
+    // never need re-resolving — see Theming for why they come from the theme, not a colour.
+    private val accent: Int
+    private val accentText: Int
+    private val mutedText: Int
+    private val onStrongPillText: Int
 
     private var attached = false
     private var scrubbing = false
@@ -87,6 +101,7 @@ class PlayerPanel @JvmOverloads constructor(
     private var lastRepeatMode = -1
     private var lastStarId: Long? = null
     private var lastStarOn: Boolean? = null
+    private var lastCycleOn: Boolean? = null
     private var measuredSide = -1
 
     // Held as a property so the *same* instance can be handed back to removePlayerListener,
@@ -117,6 +132,7 @@ class PlayerPanel @JvmOverloads constructor(
         seekBar = findViewById(R.id.player_seek)
         elapsedView = findViewById(R.id.player_elapsed)
         totalView = findViewById(R.id.player_total)
+        cycleButton = findViewById(R.id.player_cycle)
         sleepButton = findViewById(R.id.player_sleep)
         prevButton = findViewById(R.id.player_prev)
         rewindButton = findViewById(R.id.player_rewind)
@@ -127,6 +143,26 @@ class PlayerPanel @JvmOverloads constructor(
         repeatButton = findViewById(R.id.player_repeat)
         starButton = findViewById(R.id.player_star)
 
+        // Tokens first: the styling pass below builds everything from them.
+        accent = Theming.color(context, R.attr.chorusAccent)
+        accentText = Theming.color(context, R.attr.chorusPlayerOnPillText)
+        mutedText = Theming.color(context, R.attr.chorusPlayerTextMuted)
+        onStrongPillText = Theming.color(context, R.attr.chorusPlayerOnStrongPillText)
+
+        val pillIdle = Theming.color(context, R.attr.chorusPlayerPill)
+        val pillBorder = Theming.color(context, R.attr.chorusPlayerPillBorder)
+        val pillOn = Theming.color(context, R.attr.chorusPlayerPillOn)
+        val pillStrong = Theming.color(context, R.attr.chorusPlayerPillStrong)
+        shuffleIdleBg = pill(pillIdle, pillBorder)
+        shuffleOnBg = pill(pillOn, 0)
+        repeatIdleBg = pill(pillIdle, pillBorder)
+        repeatAllBg = pill(pillOn, 0)
+        repeatOneBg = pill(pillStrong, 0)
+        starIdleBg = pill(pillIdle, pillBorder)
+        starOnBg = pill(pillOn, 0)
+        cycleIdleBg = pill(pillIdle, pillBorder)
+        cycleOnBg = pill(pillStrong, 0)
+
         styleScrim()
         styleArt()
         styleSeekBar()
@@ -134,6 +170,7 @@ class PlayerPanel @JvmOverloads constructor(
         wireSeekBar()
         wireButtons()
         setMarquee(titleView)
+        renderCycle()
     }
 
     // ---------------------------------------------------------------- public
@@ -220,11 +257,20 @@ class PlayerPanel @JvmOverloads constructor(
 
     // ---------------------------------------------------------------- styling
 
-    /** Bottom-heavy scrim so text and controls stay legible over bright artwork. */
+    /**
+     * Bottom-heavy scrim so text and controls stay legible over bright artwork. It is a
+     * *themed* ramp, not a fixed black one: light mode fades to near-white so the dark
+     * player text reads, dark mode keeps today's fade to near-black.
+     */
     private fun styleScrim() {
         scrimView.background = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(0x00000000, 0x33000000, 0xB3000000.toInt(), 0xF20A0A0E.toInt())
+            intArrayOf(
+                Color.TRANSPARENT,
+                Theming.color(context, R.attr.chorusPlayerScrimMid),
+                Theming.color(context, R.attr.chorusPlayerScrimLow),
+                Theming.color(context, R.attr.chorusPlayerScrimEnd),
+            )
         )
     }
 
@@ -232,6 +278,11 @@ class PlayerPanel @JvmOverloads constructor(
      * Rounded corners and a real drop shadow, without a nine-patch or an outline asset.
      * The outline is recomputed by the framework on every resize, so nothing is allocated
      * per frame.
+     *
+     * In the light (and cycle) themes the artwork additionally sits on a near-black card,
+     * because a pale sleeve on a pale page is otherwise unreadable. In the dark theme the
+     * card token is transparent and nothing is drawn, which keeps the art floating over
+     * the backdrop exactly as before.
      */
     private fun styleArt() {
         val radius = dp(ART_CORNER_DP).toFloat()
@@ -243,6 +294,15 @@ class PlayerPanel @JvmOverloads constructor(
         }
         artView.clipToOutline = true
         artView.elevation = dp(16).toFloat()
+
+        val card = Theming.color(context, R.attr.chorusPlayerArtCard)
+        if (card != Color.TRANSPARENT) {
+            artFrame.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = radius
+                setColor(card)
+            }
+        }
     }
 
     /** Custom track + thumb: rounded 4 dp track, accent fill, oversized grab handle. */
@@ -252,12 +312,12 @@ class PlayerPanel @JvmOverloads constructor(
         val background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = corner
-            setColor(0x33FFFFFF)
+            setColor(Theming.color(context, R.attr.chorusPlayerSeekTrack))
         }
         val progress = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = corner
-            setColor(ACCENT)
+            setColor(accent)
         }
         seekBar.progressDrawable = LayerDrawable(arrayOf(
             background,
@@ -266,11 +326,11 @@ class PlayerPanel @JvmOverloads constructor(
 
         val halo = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
-            setColor(0x40FFFFFF)
+            setColor(Theming.color(context, R.attr.chorusPlayerSeekHalo))
         }
         val core = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
-            setColor(Color.WHITE)
+            setColor(Theming.color(context, R.attr.chorusPlayerSeekThumb))
         }
         val thumb = LayerDrawable(arrayOf(halo, core)).apply {
             val outer = dp(24)
@@ -286,14 +346,18 @@ class PlayerPanel @JvmOverloads constructor(
         seekBar.minimumHeight = dp(32)
     }
 
-    /** The one filled control on the screen: white disc, dark glyph, masked ripple. */
+    /**
+     * The one filled control on the screen. The disc inverts with the theme — white with a
+     * dark glyph in dark mode, near-black with a white glyph in light/cycle — so it stays
+     * the highest-contrast target on the page either way.
+     */
     private fun stylePlayPause() {
         val disc = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
-            setColor(Color.WHITE)
+            setColor(Theming.color(context, R.attr.chorusPlayerSurface))
         }
         playPauseButton.background = RippleDrawable(
-            ColorStateList.valueOf(0x33000000),
+            ColorStateList.valueOf(Theming.color(context, R.attr.chorusPlayerRipple)),
             disc,
             GradientDrawable().apply { shape = GradientDrawable.OVAL }
         )
@@ -309,7 +373,7 @@ class PlayerPanel @JvmOverloads constructor(
             if (border != 0) setStroke(dp(1), border)
         }
         return RippleDrawable(
-            ColorStateList.valueOf(0x33FFFFFF),
+            ColorStateList.valueOf(Theming.color(context, R.attr.chorusPlayerRipple)),
             body,
             GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -421,9 +485,10 @@ class PlayerPanel @JvmOverloads constructor(
         val shuffleOn = player.shuffleModeEnabled
         if (shuffleOn != lastShuffleOn) {
             lastShuffleOn = shuffleOn
-            // Same glyph both ways: the amber pill is what says "on", so it reads at 20 m.
+            // Same glyph both ways: the filled pill is what says "on", so it reads at 20 m
+            // (amber on the normal themes, solid black in cycle mode — see the tokens).
             shuffleButton.setBackground(if (shuffleOn) shuffleOnBg else shuffleIdleBg)
-            shuffleButton.setTextColor(if (shuffleOn) ACCENT_TEXT else MUTED_TEXT)
+            shuffleButton.setTextColor(if (shuffleOn) accentText else mutedText)
             shuffleButton.contentDescription =
                 if (shuffleOn) "Shuffle on, tap to turn off" else "Shuffle off, tap to turn on"
         }
@@ -435,19 +500,19 @@ class PlayerPanel @JvmOverloads constructor(
                 Player.REPEAT_MODE_ALL -> {
                     repeatButton.text = GLYPH_REPEAT_ALL
                     repeatButton.setBackground(repeatAllBg)
-                    repeatButton.setTextColor(ACCENT_TEXT)
+                    repeatButton.setTextColor(accentText)
                     repeatButton.contentDescription = "Repeating all, tap to repeat one track"
                 }
                 Player.REPEAT_MODE_ONE -> {
                     repeatButton.text = GLYPH_REPEAT_ONE
                     repeatButton.setBackground(repeatOneBg)
-                    repeatButton.setTextColor(INK_TEXT)
+                    repeatButton.setTextColor(onStrongPillText)
                     repeatButton.contentDescription = "Repeating one track, tap to turn off"
                 }
                 else -> {
                     repeatButton.text = GLYPH_REPEAT_OFF
                     repeatButton.setBackground(repeatIdleBg)
-                    repeatButton.setTextColor(MUTED_TEXT)
+                    repeatButton.setTextColor(mutedText)
                     repeatButton.contentDescription = "Repeat off, tap to repeat all"
                 }
             }
@@ -472,7 +537,7 @@ class PlayerPanel @JvmOverloads constructor(
                 lastStarOn = null
                 starButton.text = GLYPH_STAR_OFF
                 starButton.setBackground(starIdleBg)
-                starButton.setTextColor(MUTED_TEXT)
+                starButton.setTextColor(mutedText)
                 starButton.contentDescription = "No track to favourite"
             }
             return
@@ -483,7 +548,7 @@ class PlayerPanel @JvmOverloads constructor(
             lastStarOn = liked
             starButton.text = if (liked) GLYPH_STAR_ON else GLYPH_STAR_OFF
             starButton.setBackground(if (liked) starOnBg else starIdleBg)
-            starButton.setTextColor(if (liked) ACCENT_TEXT else MUTED_TEXT)
+            starButton.setTextColor(if (liked) accentText else mutedText)
             starButton.contentDescription =
                 if (liked) "Favourite, tap to remove" else "Not a favourite, tap to add"
         }
@@ -498,20 +563,39 @@ class PlayerPanel @JvmOverloads constructor(
         when (SleepTimer.mode()) {
             SleepTimer.Mode.OFF -> {
                 sleepButton.text = GLYPH_SLEEP
-                sleepButton.setTextColor(MUTED_TEXT)
+                sleepButton.setTextColor(mutedText)
                 sleepButton.contentDescription = "Sleep timer off, tap to set"
             }
             SleepTimer.Mode.COUNTDOWN -> {
                 sleepButton.text = GLYPH_SLEEP + " " + formatTime(SleepTimer.remainingMs())
-                sleepButton.setTextColor(ACCENT_TEXT)
+                sleepButton.setTextColor(accentText)
                 sleepButton.contentDescription = "Sleep timer running, tap to change or cancel"
             }
             SleepTimer.Mode.END_OF_TRACK -> {
                 sleepButton.text = END_OF_TRACK_LABEL
-                sleepButton.setTextColor(ACCENT_TEXT)
+                sleepButton.setTextColor(accentText)
                 sleepButton.contentDescription = "Sleeping at end of track, tap to change or cancel"
             }
         }
+    }
+
+    /**
+     * Cycle-mode sun in the time row, next to the sleep control. Cycle mode is the one
+     * manual appearance override left in the app (the rest is the system UI mode), and it
+     * is reachable here as well as on the Setup tab.
+     *
+     * Tapping only persists: the host Activity listens for the change and calls
+     * `recreate()`, which re-inflates this panel under the new theme. So there is nothing
+     * to update in place — the guard just avoids re-styling on every render.
+     */
+    private fun renderCycle() {
+        val on = Settings.isCycleMode(context)
+        if (on == lastCycleOn) return
+        lastCycleOn = on
+        cycleButton.setBackground(if (on) cycleOnBg else cycleIdleBg)
+        cycleButton.setTextColor(if (on) onStrongPillText else mutedText)
+        cycleButton.contentDescription =
+            if (on) "Cycle mode on, tap to turn off" else "Cycle mode off, tap to turn on"
     }
 
     /** Options sheet: cancel when running, then the four timed presets and end-of-track. */
@@ -618,6 +702,12 @@ class PlayerPanel @JvmOverloads constructor(
             Favourites.toggle(id)
         }
 
+        cycleButton.setOnClickListener {
+            // Persist only. Settings listeners run synchronously, and PlayerActivity's
+            // listener calls recreate(), which re-inflates this panel on the new theme.
+            Settings.setCycleMode(context, !Settings.isCycleMode(context))
+        }
+
         sleepButton.setOnClickListener { sleepDialog() }
     }
 
@@ -682,14 +772,6 @@ class PlayerPanel @JvmOverloads constructor(
         const val GLYPH_STAR_OFF = "☆"
         const val GLYPH_SLEEP = "⏱"
         const val END_OF_TRACK_LABEL = "End of track"
-
-        // One accent, reused for the seek fill and the active mode pills, so the screen reads
-        // as a single system rather than a bag of colours.
-        const val ACCENT = 0xFFFFC107.toInt()
-        const val ACCENT_TEXT = 0xFFFFD54F.toInt()
-        const val INK_TEXT = 0xFF101014.toInt()
-        const val MUTED_TEXT = 0x99FFFFFF.toInt()
-        const val BORDER_IDLE = 0x1AFFFFFF
 
         const val ZERO_TIME = "0:00"
         const val NOTHING_PLAYING = "Nothing playing"

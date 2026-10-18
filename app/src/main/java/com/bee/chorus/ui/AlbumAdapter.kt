@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -137,12 +136,13 @@ class AlbumAdapter(
         }
 
         /**
-         * Rounded placeholder for artwork: a hair lighter than the dark theme's
-         * background, a hair darker than the light (Cycle) theme's, so rows look
-         * intentional while nothing is decoded yet. Built once per ViewHolder.
+         * Rounded placeholder for artwork: a hair lighter than a dark page's background, a
+         * hair darker than a light one, so rows look intentional while nothing is decoded
+         * yet. Reads the themed page colour, so it follows day/night and cycle mode.
+         * Built once per ViewHolder.
          */
         fun roundedSurface(ctx: Context, cornerDp: Float): GradientDrawable {
-            val base = themeColor(ctx, android.R.attr.colorBackground, Color.BLACK)
+            val base = Theming.color(ctx, R.attr.chorusBg)
             val fill = if (ColorUtils.calculateLuminance(base) > 0.5f) {
                 ColorUtils.blendARGB(base, Color.BLACK, 0.08f)
             } else {
@@ -153,13 +153,6 @@ class AlbumAdapter(
                 cornerRadius = cornerDp * ctx.resources.displayMetrics.density
                 setColor(fill)
             }
-        }
-
-        fun themeColor(ctx: Context, attr: Int, fallback: Int): Int {
-            val out = TypedValue()
-            val resolved = ctx.theme.resolveAttribute(attr, out, true) &&
-                out.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT
-            return if (resolved) out.data else fallback
         }
     }
 }

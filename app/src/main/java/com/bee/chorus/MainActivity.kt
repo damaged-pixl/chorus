@@ -33,6 +33,7 @@ import com.bee.chorus.ui.PlaylistAdapter
 import com.bee.chorus.ui.PlaylistPanel
 import com.bee.chorus.ui.QueuePanel
 import com.bee.chorus.ui.SearchPanel
+import com.bee.chorus.ui.Theming
 import com.bee.chorus.ui.TrackAdapter
 import java.util.concurrent.Executors
 
@@ -58,8 +59,12 @@ class MainActivity : AppCompatActivity() {
     // the other two order by the play_stats table, unplayed tracks last.
     private var sortMode = SORT_TITLE
     private lateinit var sortButtons: List<TextView>
+
+    // Sort-bar tints, resolved in wireSortBar() rather than as field initialisers: the
+    // theme is not final until onCreate has had its say (CycleMode.applyTheme runs first),
+    // and a field initialiser would read the manifest theme instead.
     private var sortIdleColor = 0
-    private val sortActiveColor = 0xFFFFC107.toInt()
+    private var sortActiveColor = 0
 
     // One RecycledViewPool shared by the three main lists, so row views survive tab
     // switches instead of being torn down per list. Safe to share because each adapter
@@ -170,9 +175,8 @@ class MainActivity : AppCompatActivity() {
     // ---------- track-list sorting ----------
 
     private fun wireSortBar() {
-        val ta = obtainStyledAttributes(intArrayOf(android.R.attr.textColorSecondary))
-        sortIdleColor = ta.getColor(0, 0x99FFFFFF.toInt())
-        ta.recycle()
+        sortIdleColor = Theming.color(this, R.attr.chorusTextSecondary)
+        sortActiveColor = Theming.color(this, R.attr.chorusAccentText)
 
         sortButtons = listOf(
             findViewById(R.id.sort_title),

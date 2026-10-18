@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -104,8 +103,10 @@ class TrackAdapter(
         private val star: TextView = view.findViewById(R.id.track_star)
 
         /** Off-star tint, resolved once per recycled holder, not per bind. */
-        private val starOffColor =
-            themeColor(view.context, android.R.attr.textColorSecondary, 0x99FFFFFF.toInt())
+        private val starOffColor = Theming.color(view.context, R.attr.chorusTextMuted)
+
+        /** On-star tint: the amber accent, darkened on a light page so it still reads. */
+        private val starOnColor = Theming.color(view.context, R.attr.chorusAccentText)
 
         init {
             // Why in code, not a drawable resource: the row owns its own corner radius,
@@ -156,7 +157,7 @@ class TrackAdapter(
             val liked = Favourites.isFavourite(t.id)
             star.visibility = View.VISIBLE
             star.text = if (liked) STAR_ON else STAR_OFF
-            star.setTextColor(if (liked) STAR_ON_COLOR else starOffColor)
+            star.setTextColor(if (liked) starOnColor else starOffColor)
             star.contentDescription =
                 if (liked) "Favourite, tap to remove" else "Not a favourite, tap to add"
         }
@@ -178,10 +179,10 @@ class TrackAdapter(
         const val UNKNOWN_TITLE = "Unknown title"
         const val UNKNOWN_DURATION = "--:--"
 
-        // Favourite star glyphs and the accent tint for "on" (same amber as the player).
+        // Favourite star glyphs. The "on" tint is the themed accent, resolved per
+        // ViewHolder rather than baked in here.
         const val STAR_ON = "★"
         const val STAR_OFF = "☆"
-        const val STAR_ON_COLOR = 0xFFFFC107.toInt()
 
         /**
          * Joins only the non-empty parts with [SEPARATOR], so a missing year or album
@@ -220,12 +221,13 @@ class TrackAdapter(
         fun two(value: Int): String = if (value < 10) "0$value" else value.toString()
 
         /**
-         * Rounded placeholder for artwork: a hair lighter than the dark theme's
-         * background, a hair darker than the light (Cycle) theme's, so rows look
-         * intentional while nothing is decoded yet. Built once per ViewHolder.
+         * Rounded placeholder for artwork: a hair lighter than a dark page's background, a
+         * hair darker than a light one, so rows look intentional while nothing is decoded
+         * yet. Reads the themed page colour, so it follows day/night and cycle mode.
+         * Built once per ViewHolder.
          */
         fun roundedSurface(ctx: Context, cornerDp: Float): GradientDrawable {
-            val base = themeColor(ctx, android.R.attr.colorBackground, Color.BLACK)
+            val base = Theming.color(ctx, R.attr.chorusBg)
             val fill = if (ColorUtils.calculateLuminance(base) > 0.5f) {
                 ColorUtils.blendARGB(base, Color.BLACK, 0.08f)
             } else {
@@ -236,13 +238,6 @@ class TrackAdapter(
                 cornerRadius = cornerDp * ctx.resources.displayMetrics.density
                 setColor(fill)
             }
-        }
-
-        fun themeColor(ctx: Context, attr: Int, fallback: Int): Int {
-            val out = TypedValue()
-            val resolved = ctx.theme.resolveAttribute(attr, out, true) &&
-                out.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT
-            return if (resolved) out.data else fallback
         }
     }
 }

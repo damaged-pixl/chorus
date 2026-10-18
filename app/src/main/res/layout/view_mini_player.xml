@@ -6,7 +6,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="64dp"
-    android:background="?android:attr/colorBackground"
+    android:background="?attr/chorusSurfaceElevated"
     android:elevation="6dp">
 
     <LinearLayout
@@ -59,7 +59,7 @@
         android:layout_width="match_parent"
         android:layout_height="2dp"
         android:layout_gravity="top"
-        android:background="#FFFFC107"
+        android:background="?attr/chorusAccent"
         android:importantForAccessibility="no"
         android:pivotX="0"
         android:scaleX="0" />

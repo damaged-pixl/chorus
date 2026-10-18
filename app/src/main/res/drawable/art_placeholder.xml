@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Neutral tile shown while art loads, and for albums that have no embedded art. -->
+<!-- Neutral tile shown while art loads, and for albums that have no embedded art.
+     Tint comes from the chorus_art_placeholder_tint token rather than a literal, so there
+     is one place to retune it. It is a single neutral value for every mode because a
+     drawable can only read @color, never ?attr — the surrounding row tile is what adapts
+     to light/dark (see TrackAdapter.roundedSurface). -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#33808080" />
+    <solid android:color="@color/chorus_art_placeholder_tint" />
     <stroke
         android:width="1dp"
-        android:color="#22808080" />
+        android:color="@color/chorus_art_placeholder_tint" />
     <corners android:radius="6dp" />
 </shape>

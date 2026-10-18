@@ -6,7 +6,6 @@ import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.WindowCompat
 import com.bee.chorus.R
 import java.util.WeakHashMap
 
@@ -136,23 +135,23 @@ object CycleMode {
     // ------------------------------------------------------------------ theme
 
     /**
-     * Point [activity] at the cycle theme when [enabled], otherwise back to the normal one.
+     * Point [activity] at the cycle theme when [enabled], otherwise back to the normal one,
+     * then fix the system-bar icon contrast for whichever of the two is now active.
      *
      * **Call order matters:** `setTheme` must run before the Activity inflates anything —
      * before `super.onCreate()` ideally, and certainly before `setContentView()`. Calling it
      * afterwards leaves already-inflated views on the old theme. Toggling therefore requires
      * `Activity.recreate()` to take visible effect.
+     *
+     * Both activities go through here, so the full-screen player picks up the bright theme
+     * exactly as MainActivity does (including dark icons on its white bars).
      */
     fun applyTheme(activity: AppCompatActivity, enabled: Boolean) {
         activity.setTheme(if (enabled) R.style.Theme_Chorus_Cycle else R.style.Theme_Chorus)
 
-        if (enabled) {
-            // Theme.Chorus.Cycle paints a white status bar but an appcompat Light theme does
-            // not ask for dark icons on it by default — black-on-black in direct sun.
-            WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
-                isAppearanceLightStatusBars = true
-                isAppearanceLightNavigationBars = true
-            }
-        }
+        // Not conditional on `enabled` any more: the normal theme is DayNight, so the
+        // system-bar icons have to follow whichever side of it we are on. See
+        // Theming.applySystemBars for why this cannot be a theme attribute at targetSdk 35+.
+        Theming.applySystemBars(activity)
     }
 }

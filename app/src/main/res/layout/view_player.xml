@@ -13,7 +13,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FF07070A">
+    android:background="?attr/chorusPlayerBg">
 
     <!-- Backdrop: a 64px decode of the current artwork, stretched to fill. Reads as a soft
          colour wash, costs ~16 KB of RAM. Loaded by Art.load, never a full-size bitmap. -->
@@ -72,13 +72,13 @@
             android:letterSpacing="-0.015"
             android:marqueeRepeatLimit="marquee_forever"
             android:maxLines="1"
-            android:shadowColor="#99000000"
+            android:shadowColor="?attr/chorusPlayerTextShadow"
             android:shadowDx="0"
             android:shadowDy="2"
             android:shadowRadius="10"
             android:singleLine="true"
             android:text="Nothing playing"
-            android:textColor="#FFFFFFFF"
+            android:textColor="?attr/chorusPlayerText"
             android:textSize="27sp"
             android:textStyle="bold" />
 
@@ -90,11 +90,11 @@
             android:ellipsize="end"
             android:fontFamily="sans-serif"
             android:maxLines="1"
-            android:shadowColor="#80000000"
+            android:shadowColor="?attr/chorusPlayerTextShadow"
             android:shadowDx="0"
             android:shadowDy="1"
             android:shadowRadius="6"
-            android:textColor="#B8FFFFFF"
+            android:textColor="?attr/chorusPlayerTextSecondary"
             android:textSize="15sp" />
 
         <!-- Track + thumb colours are replaced with a LayerDrawable/ClipDrawable in Kotlin. -->
@@ -109,9 +109,18 @@
             android:progress="0"
             android:splitTrack="false" />
 
-        <!-- elapsed (left) ... sleep timer (centre) ... total (right). The sleep control
-             lives in the time row so the wide modes row keeps its breathing room; it
-             shows the countdown ("⏱ 14:32") or "End of track" while armed. -->
+        <!-- elapsed (left) ... cycle mode + sleep timer (centre) ... total (right).
+             The two secondary controls live in the time row rather than the modes row
+             below: that row is already 104dp pills and cannot take a fourth control at
+             360dp width without shrinking them, and in cycle mode the pills grow to 72dp
+             anyway. Cycle mode is a manual high-contrast override, not a light/dark
+             preference, so it stays a toggle even though the theme is DayNight. The sleep
+             control shows its countdown ("⏱ 14:32") or "End of track" while armed.
+
+             The sun carries U+FE0E (variation selector 15) to force *text* presentation.
+             Without it Android draws U+2600 as a colour emoji, which ignores both the pill
+             background and the on/off text colour — so the control could not signal its
+             state at all. Same trap applies to any other glyph added here. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -126,8 +135,21 @@
                 android:gravity="start"
                 android:letterSpacing="0.06"
                 android:text="0:00"
-                android:textColor="#99FFFFFF"
+                android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/player_cycle"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="8dp"
+                android:clickable="true"
+                android:contentDescription="Cycle mode off, tap to turn on"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="&#9728;&#65038;"
+                android:textColor="?attr/chorusPlayerTextMuted"
+                android:textSize="19sp" />
 
             <TextView
                 android:id="@+id/player_sleep"
@@ -141,7 +163,7 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:text="⏱"
-                android:textColor="#99FFFFFF"
+                android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="12sp" />
 
             <TextView
@@ -153,7 +175,7 @@
                 android:gravity="end"
                 android:letterSpacing="0.06"
                 android:text="0:00"
-                android:textColor="#99FFFFFF"
+                android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="12sp" />
         </LinearLayout>
 
@@ -177,7 +199,7 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:text="⏮"
-                android:textColor="#FFFFFFFF"
+                android:textColor="?attr/chorusPlayerText"
                 android:textSize="24sp" />
 
             <TextView
@@ -190,7 +212,7 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:text="⏪"
-                android:textColor="#FFFFFFFF"
+                android:textColor="?attr/chorusPlayerText"
                 android:textSize="24sp" />
 
             <!-- Filled circle with a dark glyph: the one high-contrast target on the screen. -->
@@ -205,7 +227,7 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:text="▶"
-                android:textColor="#FF101014"
+                android:textColor="?attr/chorusPlayerOnSurface"
                 android:textSize="30sp" />
 
             <TextView
@@ -218,7 +240,7 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:text="⏩"
-                android:textColor="#FFFFFFFF"
+                android:textColor="?attr/chorusPlayerText"
                 android:textSize="24sp" />
 
             <TextView
@@ -231,7 +253,7 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:text="⏭"
-                android:textColor="#FFFFFFFF"
+                android:textColor="?attr/chorusPlayerText"
                 android:textSize="24sp" />
         </LinearLayout>
 
@@ -258,7 +280,7 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:text="🔀"
-                android:textColor="#99FFFFFF"
+                android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="20sp" />
 
             <TextView
@@ -275,7 +297,7 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:text="⇄"
-                android:textColor="#99FFFFFF"
+                android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="20sp" />
 
             <!-- Favourite star for the current track. Wrap width (a small glyph), so the
@@ -293,7 +315,7 @@
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:text="☆"
-                android:textColor="#99FFFFFF"
+                android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="20sp" />
         </LinearLayout>
     </LinearLayout>
