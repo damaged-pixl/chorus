@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.6 MB** (1,614,627 bytes — R8 full mode, English-only locales,
+**Release APK: ~1.6 MB** (1,624,203 bytes — R8 full mode, English-only locales,
 resource shrinking). No Compose, no Material, no DI
 framework, no analytics, no crash reporting, no ads, **no INTERNET permission** — the
 app cannot phone home even if it wanted to.
@@ -36,10 +36,29 @@ APK when you care about size.
 
 Background playback with a media notification and lock-screen/Bluetooth controls,
 tracks + albums browse, live search, playlists (local SQLite), queue with shuffle and
-repeat (off / all / one), full-screen player with seek, mini player.
+repeat (off / all / one), full-screen player with seek, mini player with a progress
+hairline.
 
 Playlists are fully editable: long-press a track or album row to add it to an existing
 or new playlist, and long-press a saved playlist to rename or delete it.
+
+**Favourites** — star any track row or the current track in the full player. The set
+lives in SQLite (`playlists.db`), shows up everywhere at once, and gets a "Favourites"
+browse entry above "+ New playlist"; long-press inside it to un-star.
+
+**Play counts** — every track change increments a `play_stats` row (counted once per
+real transition, never on resume or seek), and the track list can be sorted by
+**Most played** or **Recently played** alongside A–Z.
+
+**Sleep timer** — in the full player, between the elapsed and total times: 15/30/45/60
+minutes or "end of track". Pauses playback when it fires, shows the time remaining
+while armed, cancels cleanly. In-memory only: it does not survive the process being
+killed.
+
+**Queue editing** — long-press a queue row to move it up/down or remove it; the edit
+goes through the shared MediaController so the lock screen sees the same queue.
+
+Empty screens say so in one friendly line (search, queue, playlists).
 
 **Cycle mode** (Setup tab) — for use on a bike. Switches to a bright high-contrast
 theme for direct sunlight and enlarges every touch target to 72dp for gloved hands.
@@ -48,8 +67,10 @@ Persisted in SharedPreferences.
 ## Layout
 
 ```
-data/      Track/Album models, LibraryReader (MediaStore), PlaylistStore (SQLite), Settings
-playback/  PlaybackService (MediaSessionService), PlayerHolder (single shared controller)
+data/      Track/Album models, LibraryReader (MediaStore), PlaylistStore (SQLite:
+           playlists, favourites, play_stats), Favourites (app-wide liked set), Settings
+playback/  PlaybackService (MediaSessionService + play counting), PlayerHolder (single
+           shared controller), SleepTimer
 ui/        Art loader, adapters, PlayerPanel, MiniPlayer, Search/Queue/Playlist panels, CycleMode
 MainActivity, PlayerActivity
 ```
@@ -81,4 +102,4 @@ mini player and the full player can never drift apart.
 
 - Cycle mode's light theme does not reach the full-screen `PlayerActivity` (it stays
   dark by design so the artwork backdrop reads).
-- No gapless/crossfade, sleep timer, or playback speed.
+- No gapless/crossfade or playback speed.

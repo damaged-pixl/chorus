@@ -19,11 +19,11 @@ overview; this file is the quick reference for agents working here.
 - **Never put full-size bitmaps in lists.** `Art` has one shared 2-thread pool, an
   LruCache (heap/8), size-based subsampling, and a negative cache for artless albums.
   Keep list binds on the bounded path.
-- **Check the *release* APK size after changes** (`~1.6 MB` / 1,614,627 bytes is the
-  baseline as of 2026-10-14, down from 1,849,450 via `localeFilters += "en"` + META-INF
-  licence excludes). Debug builds are ~8.7 MB and meaningless for size. A
-  dependency or asset regression shows up here first — this is the primary guard
-  against feature creep into the thin stack.
+- **Check the *release* APK size after changes** (`~1.6 MB` / 1,624,203 bytes is the
+  baseline as of 2026-10-18, up from 1,614,627 for the six new features; earlier
+  1,849,450 via `localeFilters += "en"` + META-INF licence excludes). Debug builds
+  are ~8.7 MB and meaningless for size. A dependency or asset regression shows up
+  here first — this is the primary guard against feature creep into the thin stack.
 
 ## Stack
 
@@ -49,15 +49,19 @@ No test suite — verify by building and running on device.
 ## Layout
 
 - `data/` — `Track.kt`/`Library.kt` models, `LibraryReader.kt` (MediaStore scan),
-  `PlaylistStore.kt` (SQLite: `playlists` + `playlist_tracks`, tracks by MediaStore id),
-  `Settings.kt` (SharedPreferences wrapper, one flag: cycle mode).
-- `playback/` — `PlaybackService.kt` (MediaSessionService), `PlayerHolder.kt`.
+  `PlaylistStore.kt` (SQLite **v3**: `playlists` + `playlist_tracks`, `favourites`,
+  `play_stats`; tracks by MediaStore id), `Favourites.kt` (app-wide liked set over
+  that DB), `Settings.kt` (SharedPreferences wrapper, one flag: cycle mode).
+- `playback/` — `PlaybackService.kt` (MediaSessionService; counts plays on media-item
+  transitions), `PlayerHolder.kt`, `SleepTimer.kt` (in-memory countdown / end-of-track).
 - `ui/` — `Art.kt`, adapters, `PlayerPanel.kt`/`MiniPlayer.kt`, Search/Queue/Playlist
   panels, `CycleMode.kt`/`CycleToggle.kt`.
-- `MainActivity.kt` (tabs + mini player), `PlayerActivity.kt` (full-screen player).
+- `MainActivity.kt` (tabs + mini player; track tab = `track_screen` sort bar + list),
+  `PlayerActivity.kt` (full-screen player).
 
 **`PlayerHolder` owns the only `MediaController`** — every screen is a view over it, so
-mini and full player can't drift. Never create a second controller.
+mini and full player can't drift. Never create a second controller. Its `player`
+property is a read-only view for observers (SleepTimer); mutations go via `whenReady`.
 
 ## Gotchas (hard-won, don't regress)
 
@@ -69,8 +73,27 @@ mini and full player can't drift. Never create a second controller.
   (Media3 has no position callback) and self-cancels. Don't make it unconditional.
 - `Settings` listeners are held strongly — remove any listener capturing an Activity in
   `onDestroy`, or `recreate()` leaks it.
-- Playlist DB `onUpgrade` is a no-op (v1, no migrations yet). If you bump the version,
-  write a real migration.
+- Playlist DB is **v3 with real migrations** (v1→v2 added `favourites`, v2→v3 added
+  `play_stats`; a v1 install falls through both branches). Any schema change needs a
+  version bump AND a matching `onUpgrade` branch. `Favourites`, `MainActivity` and
+  `PlaybackService` each open their own `PlaylistStore` on the app context — safe
+  because SQLite connections are pooled per file path.
+- **Play counts increment in `PlaybackService.onMediaItemTransition`** — that callback
+  fires only on real track changes (never on pause/resume or in-track seeks), which is
+  why the counts are right. Don't also count from the UI side.
+- **`TrackAdapter` renders the favourite star from the `Favourites` singleton and
+  listens only while attached** (`onAttachedToRecyclerView`/`onDetachedFromRecyclerView`
+  are its leak-safe pairing — don't break it). `Favourites`/`SleepTimer` listeners
+  registered anywhere else must be removed in onDestroy or the matching detach.
+- **QueuePanel's queue signature (count|first|last|current) cannot see interior
+  reorders** — `moveItem`/`removeItem` clear `contentSignature` to force the next
+  player event to rebuild the rows. Keep that pattern for any further queue editing.
+- The Tracks tab is `track_screen` (A–Z / Most played / Recently played sort bar +
+  list) shown as one unit — `show()` and `wireTabs` switch on `track_screen`, never on
+  the bare `track_list` RecyclerView inside it.
+- `SleepTimer` is deliberately in-memory only (no persistence across process death).
+  Its end-of-track mode re-arms one exactly-delayed runnable from every player event —
+  read its KDoc before changing the firing logic.
 - **Kotlin 2.4 removed `kotlinOptions {}`** and AGP 9's built-in Kotlin derives
   `jvmTarget` from `compileOptions.targetCompatibility` (17) automatically. Don't add a
   `kotlin { compilerOptions {} }` block — it's redundant here.
@@ -88,4 +111,5 @@ mini and full player can't drift. Never create a second controller.
 
 - Cycle mode's light theme doesn't reach `PlayerActivity` (stays dark by design so the
   artwork backdrop reads).
-- No gapless/crossfade, sleep timer, or playback speed.
+- No gapless/crossfade or playback speed. The sleep timer does not survive process
+  death (by design).
