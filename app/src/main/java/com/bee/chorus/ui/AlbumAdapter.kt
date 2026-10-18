@@ -1,16 +1,11 @@
 package com.bee.chorus.ui
 
 import android.annotation.SuppressLint
-import android.content.Context
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.R
 import com.bee.chorus.data.Album
@@ -59,7 +54,7 @@ class AlbumAdapter(
             // Why in code, not a drawable resource: the row owns its own corner radius,
             // and a GradientDrawable is both the tinted placeholder and the outline
             // source that lets clipToOutline round the bitmap Art hands us.
-            art.background = roundedSurface(view.context, ART_CORNER_DP)
+            art.background = Ui.roundedSurface(view.context, ART_CORNER_DP)
             art.clipToOutline = true
 
             // Set once: resolves its own position at click time, so no re-binding and
@@ -134,32 +129,6 @@ class AlbumAdapter(
             count <= 0 -> ""
             count == 1 -> "1 track"
             else -> "$count tracks"
-        }
-
-        /**
-         * Rounded placeholder for artwork: a hair lighter than the dark theme's
-         * background, a hair darker than the light (Cycle) theme's, so rows look
-         * intentional while nothing is decoded yet. Built once per ViewHolder.
-         */
-        fun roundedSurface(ctx: Context, cornerDp: Float): GradientDrawable {
-            val base = themeColor(ctx, android.R.attr.colorBackground, Color.BLACK)
-            val fill = if (ColorUtils.calculateLuminance(base) > 0.5f) {
-                ColorUtils.blendARGB(base, Color.BLACK, 0.08f)
-            } else {
-                ColorUtils.blendARGB(base, Color.WHITE, 0.10f)
-            }
-            return GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = cornerDp * ctx.resources.displayMetrics.density
-                setColor(fill)
-            }
-        }
-
-        fun themeColor(ctx: Context, attr: Int, fallback: Int): Int {
-            val out = TypedValue()
-            val resolved = ctx.theme.resolveAttribute(attr, out, true) &&
-                out.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT
-            return if (resolved) out.data else fallback
         }
     }
 }

@@ -190,6 +190,14 @@ class PlaylistPanel @JvmOverloads constructor(
     /** Id of the playlist on screen, or [NO_PLAYLIST] when closed. */
     fun currentPlaylistId(): Long = playlistId
 
+    /**
+     * MediaStore id of the track the shared player holds, or null. Pushed down by the host
+     * (the same value the track list gets) so playlist rows carry the now-playing cue too.
+     */
+    fun setCurrentTrackId(id: Long?) {
+        adapter.currentTrackId = id
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         // Paired with the window below: RecyclerView's own detach hooks never fire on

@@ -1,16 +1,11 @@
 package com.bee.chorus.ui
 
 import android.annotation.SuppressLint
-import android.content.Context
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.R
 import com.bee.chorus.data.Favourites
@@ -19,15 +14,15 @@ import com.bee.chorus.data.Track
 /**
  * RecyclerView adapter for a flat list of tracks.
  *
- * Rows come from `R.layout.item_track` (52dp rounded art, bold title,
- * "artist • album • year", tabular duration on the right).
+ * Rows come from `R.layout.item_track` (56dp rounded art, bold title,
+ * "artist • album • year", tabular duration on the right, favourite star).
  *
  * Tapping a row fires [onClick] with the *bound* position and the current list, so the
  * host can do `PlayerHolder.play(list, index)` without holding its own copy.
  *
- * Bind path discipline: no I/O, no decoding, no listener objects. The click listener
- * and the artwork shape are built once per recycled ViewHolder; every bind only reads
- * fields and hands a cache key to [Art].
+ * Bind path discipline: no I/O, no decoding, no listener objects. The click listener, the
+ * artwork shape, the now-playing cue and the star tint are built once per recycled
+ * ViewHolder; every bind only reads fields and hands a cache key to [Art].
  */
 class TrackAdapter(
     var onClick: ((Int, List<Track>) -> Unit)? = null,
@@ -35,6 +30,27 @@ class TrackAdapter(
 ) : RecyclerView.Adapter<TrackAdapter.VH>() {
 
     private val items = ArrayList<Track>()
+
+    /**
+     * MediaStore id of the track the shared player currently holds, or null when nothing is
+     * loaded. The host pushes it down (MainActivity reads the one PlayerHolder controller);
+     * a matching row then gets the now-playing cue — an accent bar on its leading edge and
+     * an accent title.
+     *
+     * Pushed rather than observed, for the same reason as [observeFavourites]: a listener
+     * registered from inside the adapter would need a host-lifecycle pairing this class
+     * cannot make safely.
+     */
+    var currentTrackId: Long? = null
+        set(value) {
+            val previous = field
+            if (previous == value) return
+            field = value
+            // Only the two rows that changed need rebinding.
+            for (i in items.indices) {
+                if (items[i].id == previous || items[i].id == value) notifyItemChanged(i)
+            }
+        }
 
     /**
      * The favourite star owns its own wiring: its state is read from [Favourites] at bind
@@ -102,16 +118,22 @@ class TrackAdapter(
         private val subtitle: TextView = view.findViewById(R.id.subtitle)
         private val duration: TextView = view.findViewById(R.id.duration)
         private val star: TextView = view.findViewById(R.id.track_star)
+        private val cue: View = view.findViewById(R.id.now_playing_bar)
 
         /** Off-star tint, resolved once per recycled holder, not per bind. */
         private val starOffColor =
-            themeColor(view.context, android.R.attr.textColorSecondary, 0x99FFFFFF.toInt())
+            Ui.themeColor(view.context, android.R.attr.textColorSecondary, 0x99FFFFFF.toInt())
+
+        /** The two title colours, likewise resolved once — a bind only picks between them. */
+        private val titleIdleColor =
+            Ui.themeColor(view.context, android.R.attr.textColorPrimary, 0xFFFFFFFF.toInt())
+        private val titleCueColor = Ui.accent(view.context)
 
         init {
             // Why in code, not a drawable resource: the row owns its own corner radius,
             // and a GradientDrawable is both the tinted placeholder and the outline
             // source that lets clipToOutline round the bitmap Art hands us.
-            art.background = roundedSurface(view.context, ART_CORNER_DP)
+            art.background = Ui.roundedSurface(view.context, ART_CORNER_DP)
             art.clipToOutline = true
 
             // Set once: the handler resolves its own position at click time, so it never
@@ -140,6 +162,12 @@ class TrackAdapter(
 
         fun bind(t: Track) {
             title.text = t.title.ifBlank { UNKNOWN_TITLE }
+
+            // Now-playing cue: accent bar plus accent title. The bar's width is always
+            // reserved by the layout (invisible, not gone) so rows never shift as it moves.
+            val playing = t.id == currentTrackId
+            cue.visibility = if (playing) View.VISIBLE else View.INVISIBLE
+            title.setTextColor(if (playing) titleCueColor else titleIdleColor)
 
             // MediaStore drops fields it cannot fill in, so build from the parts that
             // actually exist instead of concatenating blindly (which left a leading
@@ -170,7 +198,7 @@ class TrackAdapter(
 
     private companion object {
         const val VIEW_TYPE = 1
-        /** Decode target for the 52dp thumbnail. 128px is what QueuePanel uses for this
+        /** Decode target for the 56dp thumbnail. 128px is what QueuePanel uses for this
          *  same layout, so both share Art's cache entry instead of holding two copies. */
         const val ART_PX = 128
         const val ART_CORNER_DP = 8f
@@ -218,31 +246,5 @@ class TrackAdapter(
         }
 
         fun two(value: Int): String = if (value < 10) "0$value" else value.toString()
-
-        /**
-         * Rounded placeholder for artwork: a hair lighter than the dark theme's
-         * background, a hair darker than the light (Cycle) theme's, so rows look
-         * intentional while nothing is decoded yet. Built once per ViewHolder.
-         */
-        fun roundedSurface(ctx: Context, cornerDp: Float): GradientDrawable {
-            val base = themeColor(ctx, android.R.attr.colorBackground, Color.BLACK)
-            val fill = if (ColorUtils.calculateLuminance(base) > 0.5f) {
-                ColorUtils.blendARGB(base, Color.BLACK, 0.08f)
-            } else {
-                ColorUtils.blendARGB(base, Color.WHITE, 0.10f)
-            }
-            return GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = cornerDp * ctx.resources.displayMetrics.density
-                setColor(fill)
-            }
-        }
-
-        fun themeColor(ctx: Context, attr: Int, fallback: Int): Int {
-            val out = TypedValue()
-            val resolved = ctx.theme.resolveAttribute(attr, out, true) &&
-                out.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT
-            return if (resolved) out.data else fallback
-        }
     }
 }

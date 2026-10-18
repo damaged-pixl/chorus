@@ -1,32 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Row for one track: 52dp rounded art, bold title, muted "artist • album • year"
-  (only the parts that exist), tabular duration pinned to the right.
+  Row for one track: 56dp rounded art, bold title, muted "artist • album • year"
+  (only the parts that exist), tabular duration pinned to the right, favourite star.
 
   NOTE: QueuePanel inflates this same layout and reads @id/art, @id/title,
   @id/subtitle and @id/duration — keep those four ids and their view types.
   The artwork background/outline is applied in TrackAdapter (rounded shape +
-  clipToOutline) so no drawable resource is needed.
+  clipToOutline) so no drawable resource is needed, and @id/now_playing_bar is only
+  switched on by TrackAdapter too (QueuePanel marks its current row with a ▶ prefix).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:minHeight="68dp"
+    android:minHeight="72dp"
     android:orientation="horizontal"
     android:gravity="center_vertical"
     android:baselineAligned="false"
     android:background="?android:attr/selectableItemBackground"
     android:clickable="true"
     android:focusable="true"
-    android:paddingStart="14dp"
-    android:paddingEnd="14dp"
+    android:paddingEnd="6dp"
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
+    <!-- Now-playing cue. INVISIBLE rather than gone while idle so its width is reserved:
+         rows then never shift as the cue moves from one track to the next. -->
+    <View
+        android:id="@+id/now_playing_bar"
+        android:layout_width="3dp"
+        android:layout_height="26dp"
+        android:layout_marginEnd="11dp"
+        android:background="@drawable/ui_accent_bar"
+        android:importantForAccessibility="no"
+        android:visibility="invisible" />
+
     <ImageView
         android:id="@+id/art"
-        android:layout_width="52dp"
-        android:layout_height="52dp"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
         android:scaleType="centerCrop"
         android:contentDescription="@null"
         android:importantForAccessibility="no" />
@@ -54,7 +65,7 @@
             android:id="@+id/subtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="3dp"
             android:textSize="13sp"
             android:singleLine="true"
             android:ellipsize="end"
@@ -62,12 +73,14 @@
             android:textColor="?android:attr/textColorSecondary" />
     </LinearLayout>
 
+    <!-- Fixed width + tabular figures so the durations line up down the column instead of
+         jittering as the text changes. -->
     <TextView
         android:id="@+id/duration"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="10dp"
-        android:minWidth="42dp"
+        android:layout_marginStart="12dp"
+        android:minWidth="44dp"
         android:gravity="end"
         android:textSize="13sp"
         android:singleLine="true"
@@ -80,14 +93,13 @@
          tap is consumed here and never also triggers the row's play action. -->
     <TextView
         android:id="@+id/track_star"
-        android:layout_width="wrap_content"
+        android:layout_width="44dp"
         android:layout_height="40dp"
         android:layout_marginStart="4dp"
-        android:minWidth="34dp"
         android:gravity="center"
         android:clickable="true"
         android:focusable="true"
-        android:textSize="18sp"
+        android:textSize="20sp"
         android:includeFontPadding="false"
         android:textColor="?android:attr/textColorSecondary"
         android:visibility="gone" />
