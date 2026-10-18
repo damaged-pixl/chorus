@@ -63,10 +63,11 @@ class AlbumAdapter(
             art.clipToOutline = true
 
             // Set once: resolves its own position at click time, so no re-binding and
-            // no allocation per bind.
+            // no allocation per bind. getOrNull (as the long-press handler below) rather
+            // than items[p] — a stale index is a no-op instead of an exception.
             itemView.setOnClickListener {
                 val p = bindingAdapterPosition
-                if (p != RecyclerView.NO_POSITION) items[p]?.let { onClick?.invoke(it) }
+                if (p != RecyclerView.NO_POSITION) items.getOrNull(p)?.let { onClick?.invoke(it) }
             }
             // Set once like the click listener; returns the bound Album at gesture time.
             itemView.setOnLongClickListener {
