@@ -2,13 +2,12 @@ package com.bee.chorus
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.view.View
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -16,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.media3.common.Player
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.data.Album
@@ -34,6 +34,7 @@ import com.bee.chorus.ui.PlaylistPanel
 import com.bee.chorus.ui.QueuePanel
 import com.bee.chorus.ui.SearchPanel
 import com.bee.chorus.ui.TrackAdapter
+import com.bee.chorus.ui.Ui
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
@@ -53,6 +54,17 @@ class MainActivity : AppCompatActivity() {
 
     private val io = Executors.newSingleThreadExecutor()
     private var cycle = false
+
+    // Tab strip: the six buttons plus the accent underline that sits under the selected one.
+    // Built once in wireTabs(); highlighting only flips their state.
+    private lateinit var tabButtons: Map<Int, Button>
+    private lateinit var tabIndicators: Map<Int, View>
+    private var activeTab = View.NO_ID
+
+    // The shared controller's current item, pushed into the track rows so the list can mark
+    // what is playing. Added in wireLists() and removed in onDestroy() — PlayerHolder holds
+    // listeners strongly and statically, so an unpaired one leaks for the life of the process.
+    private val playerListener: (Player) -> Unit = { player -> publishNowPlaying(player) }
 
     // Track-list sort. TITLE is the MediaStore scan order (title, case-insensitive);
     // the other two order by the play_stats table, unplayed tracks last.
@@ -293,6 +305,10 @@ class MainActivity : AppCompatActivity() {
         // their own onAttachedToWindow/onDetachedFromWindow.
         trackAdapter.observeFavourites()
 
+        // Now-playing cue for the track rows, from the single shared controller. Same
+        // Activity-lifetime pairing as the Favourites observer above (see onDestroy).
+        PlayerHolder.addPlayerListener(playerListener)
+
         // Tapping the mini player opens the full-screen player.
         miniPlayer.setOnClickListener { PlayerActivity.start(this) }
 
@@ -478,9 +494,56 @@ class MainActivity : AppCompatActivity() {
             R.id.tab_queue to R.id.queue_panel,
             R.id.tab_settings to R.id.settings_panel
         )
+        // The accent underline that sits under whichever tab is selected.
+        val indicators = mapOf(
+            R.id.tab_tracks to R.id.tab_indicator_tracks,
+            R.id.tab_albums to R.id.tab_indicator_albums,
+            R.id.tab_playlists to R.id.tab_indicator_playlists,
+            R.id.tab_search to R.id.tab_indicator_search,
+            R.id.tab_queue to R.id.tab_indicator_queue,
+            R.id.tab_settings to R.id.tab_indicator_settings
+        )
+
+        tabButtons = map.keys.associateWith { findViewById(it) }
+        tabIndicators = indicators.keys.associateWith { findViewById(indicators.getValue(it)) }
+
         for ((tab, target) in map) {
-            findViewById<Button>(tab).setOnClickListener { show(target) }
+            val button = tabButtons.getValue(tab)
+            // The pill and the label colour come from the button's own selected state, so a
+            // tab change costs one setSelected() and nothing else has to be redrawn.
+            button.background = Ui.tabBackground(this)
+            button.setTextColor(Ui.tabTextColors(this))
+            button.setOnClickListener { show(target) }
         }
+
+        // Hairline between the strip and the content: tinted from the theme, not a literal.
+        findViewById<View>(R.id.tab_divider).setBackgroundColor(
+            Ui.faintColor(this, android.R.attr.textColorSecondary, HAIRLINE_ALPHA)
+        )
+
+        // track_screen is the layout's default panel, so Tracks starts lit.
+        highlightTab(R.id.tab_tracks)
+    }
+
+    /**
+     * Light one tab: accent bold label, the filled pill (its background state list) and the
+     * underline. Guarded, so re-showing the panel already on screen costs nothing.
+     */
+    private fun highlightTab(tab: Int) {
+        if (tab == activeTab) return
+        val previous = activeTab
+        activeTab = tab
+        styleTab(previous, false)
+        styleTab(tab, true)
+    }
+
+    private fun styleTab(tab: Int, selected: Boolean) {
+        if (tab == View.NO_ID) return
+        tabButtons[tab]?.apply {
+            isSelected = selected
+            setTypeface(if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT)
+        }
+        tabIndicators[tab]?.visibility = if (selected) View.VISIBLE else View.GONE
     }
 
     private fun wireCycle() {
@@ -498,6 +561,9 @@ class MainActivity : AppCompatActivity() {
             val v: View = findViewById(id)
             v.visibility = if (id == target) View.VISIBLE else View.GONE
         }
+        // Keep the strip in step with the content. playlist_panel is the Lists tab's own
+        // detail screen, so opening a playlist leaves that tab lit.
+        PANEL_TABS[target]?.let { highlightTab(it) }
         if (target == R.id.playlist_home) {
             // Re-runs the list query (and its empty state) on every visit, so a
             // playlist created or deleted elsewhere is never stale on screen.
@@ -505,11 +571,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Push the controller's current track into every track list on screen so the now-playing
+     * cue follows the one shared player. Media ids are the MediaStore track id (see
+     * PlayerHolder.play), which is exactly what the adapters compare against.
+     */
+    private fun publishNowPlaying(player: Player) {
+        val id = player.currentMediaItem?.mediaId?.toLongOrNull()
+        trackAdapter.currentTrackId = id
+        searchPanel.setCurrentTrackId(id)
+        playlistPanel.setCurrentTrackId(id)
+    }
+
     override fun onDestroy() {
         // Undo the Activity-lifetime pairing from wireLists. Favourites holds listeners
         // strongly and statically, so anything not removed here is leaked for good —
-        // including across every recreate() from the cycle-mode toggle.
+        // including across every recreate() from the cycle-mode toggle. PlayerHolder holds
+        // its listeners just as strongly, so the now-playing push is unhooked the same way.
         trackAdapter.stopObservingFavourites()
+        PlayerHolder.removePlayerListener(playerListener)
         super.onDestroy()
         io.shutdown()
     }
@@ -519,5 +599,19 @@ class MainActivity : AppCompatActivity() {
         const val SORT_TITLE = 0
         const val SORT_PLAYS = 1
         const val SORT_RECENT = 2
+
+        /** Panel shown -> the tab that owns it. Drives the tab strip's selected state. */
+        val PANEL_TABS = mapOf(
+            R.id.track_screen to R.id.tab_tracks,
+            R.id.album_list to R.id.tab_albums,
+            R.id.playlist_home to R.id.tab_playlists,
+            R.id.playlist_panel to R.id.tab_playlists,
+            R.id.search_panel to R.id.tab_search,
+            R.id.queue_panel to R.id.tab_queue,
+            R.id.settings_panel to R.id.tab_settings
+        )
+
+        /** Alpha of the strip's hairline, over the theme's secondary text colour. */
+        const val HAIRLINE_ALPHA = 0x24
     }
 }
