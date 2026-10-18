@@ -50,10 +50,10 @@ browse entry above "+ New playlist"; long-press inside it to un-star.
 real transition, never on resume or seek), and the track list can be sorted by
 **Most played** or **Recently played** alongside A–Z.
 
-**Sleep timer** — in the full player, between the elapsed and total times: 15/30/45/60
-minutes or "end of track". Pauses playback when it fires, shows the time remaining
-while armed, cancels cleanly. In-memory only: it does not survive the process being
-killed.
+**Sleep timer** — in the full player, in the mode row beside shuffle, repeat and the
+favourite star: 15/30/45/60 minutes or "end of track". Pauses playback when it fires, shows
+the time remaining while armed, cancels cleanly. In-memory only: it does not survive the
+process being killed.
 
 **Queue editing** — long-press a queue row to move it up/down or remove it; the edit
 goes through the shared MediaController so the lock screen sees the same queue.
