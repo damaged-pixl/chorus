@@ -198,10 +198,29 @@
                 android:minHeight="48dp"
                 android:text="+ New playlist" />
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/playlist_list"
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/playlist_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <!-- One-line empty state, centred over the (empty) playlist list. -->
+                <TextView
+                    android:id="@+id/playlist_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:gravity="center"
+                    android:padding="24dp"
+                    android:text="No playlists yet — tap ‘+ New playlist’ to make one"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+            </FrameLayout>
         </LinearLayout>
 
         <com.bee.chorus.ui.PlaylistPanel

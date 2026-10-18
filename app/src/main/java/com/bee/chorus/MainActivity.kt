@@ -157,7 +157,13 @@ class MainActivity : AppCompatActivity() {
         val list = io.submit<List<Pair<Long, String>>> { store.listPlaylists() }
         io.execute {
             val res = list.get()
-            runOnUiThread { playlistAdapter.submit(res) }
+            runOnUiThread {
+                playlistAdapter.submit(res)
+                // One-line empty state centred over the list. Playlists live in our
+                // own DB (not MediaStore), so the state is accurate immediately.
+                findViewById<View>(R.id.playlist_empty).visibility =
+                    if (res.isEmpty()) View.VISIBLE else View.GONE
+            }
         }
     }
 
@@ -484,10 +490,9 @@ class MainActivity : AppCompatActivity() {
             v.visibility = if (id == target) View.VISIBLE else View.GONE
         }
         if (target == R.id.playlist_home) {
-            io.execute {
-                val res = store.listPlaylists()
-                runOnUiThread { playlistAdapter.submit(res) }
-            }
+            // Re-runs the list query (and its empty state) on every visit, so a
+            // playlist created or deleted elsewhere is never stale on screen.
+            refreshPlaylists()
         }
     }
 

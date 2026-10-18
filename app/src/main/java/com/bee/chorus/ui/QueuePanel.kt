@@ -35,6 +35,7 @@ class QueuePanel @JvmOverloads constructor(
     private val shuffleButton: Button
     private val repeatButton: Button
     private val nowPlaying: TextView
+    private val emptyView: TextView
     private val listView: RecyclerView
 
     private val adapter = QueueAdapter(
@@ -64,6 +65,7 @@ class QueuePanel @JvmOverloads constructor(
         shuffleButton = findViewById(R.id.queue_shuffle)
         repeatButton = findViewById(R.id.queue_repeat)
         nowPlaying = findViewById(R.id.queue_now_playing)
+        emptyView = findViewById(R.id.queue_empty)
         listView = findViewById(R.id.queue_list)
 
         listView.layoutManager = LinearLayoutManager(context)
@@ -147,6 +149,9 @@ class QueuePanel @JvmOverloads constructor(
 
     private fun syncQueue(player: Player) {
         val count = player.mediaItemCount
+        // Empty state: shown for a genuinely empty queue (or before the first track),
+        // regardless of whether the row list itself has changed.
+        emptyView.visibility = if (count <= 0) View.VISIBLE else View.GONE
         if (count <= 0) {
             if (contentSignature != null) {
                 contentSignature = null

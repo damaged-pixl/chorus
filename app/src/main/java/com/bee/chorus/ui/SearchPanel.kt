@@ -7,6 +7,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.util.AttributeSet
 import android.view.LayoutInflater
+import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -37,6 +38,7 @@ class SearchPanel @JvmOverloads constructor(
 
     private val input: EditText
     private val status: TextView
+    private val emptyView: TextView
     private val listView: RecyclerView
     private val adapter = TrackAdapter()
 
@@ -68,6 +70,7 @@ class SearchPanel @JvmOverloads constructor(
 
         input = findViewById(R.id.search_input)
         status = findViewById(R.id.search_status)
+        emptyView = findViewById(R.id.search_empty)
         listView = findViewById(R.id.search_list)
 
         listView.layoutManager = LinearLayoutManager(context)
@@ -130,10 +133,16 @@ class SearchPanel @JvmOverloads constructor(
     private fun showResults(list: List<Track>) {
         results = list
         adapter.submit(list)
-        status.text = when {
-            list.isEmpty() && allTracks.isEmpty() -> EMPTY_LIBRARY
-            list.isEmpty() -> NO_MATCHES
-            else -> "${list.size} ${if (list.size == 1) "result" else "results"}"
+        if (list.isEmpty()) {
+            // The centred overlay carries the friendly message; the tiny status line
+            // stands down so two empty-state lines never stack up.
+            emptyView.text =
+                if (allTracks.isEmpty()) EMPTY_LIBRARY else NO_MATCHES
+            emptyView.visibility = View.VISIBLE
+            status.text = ""
+        } else {
+            emptyView.visibility = View.GONE
+            status.text = "${list.size} ${if (list.size == 1) "result" else "results"}"
         }
     }
 
@@ -158,7 +167,7 @@ class SearchPanel @JvmOverloads constructor(
 
     private companion object {
         const val DEBOUNCE_MS = 150L
-        const val NO_MATCHES = "No matching tracks"
-        const val EMPTY_LIBRARY = "No tracks to search"
+        const val NO_MATCHES = "No matches — try another word"
+        const val EMPTY_LIBRARY = "No music on this phone yet"
     }
 }
