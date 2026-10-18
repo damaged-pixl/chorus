@@ -1,50 +1,83 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Compact single-row mini player: small art, title, play/pause, plus a 2dp
-     playback-progress hairline drawn along the top edge (width driven by scaleX
-     from MiniPlayer's own playing-and-attached 500 ms tick — same discipline as
-     the full player's seek bar; Media3 has no position callback). -->
+<!-- Compact mini player: rounded art, title over artist, play/pause on a circular
+     ripple, a hairline along the top edge and a 2dp playback-progress hairline just
+     below it (width driven by scaleX from MiniPlayer's own playing-and-attached 500 ms
+     tick — same discipline as the full player's seek bar; Media3 has no position
+     callback).
+
+     The bar's background, the hairline colours, the rounded art and the play/pause disc
+     are all applied in code (Ui), so nothing here needs a colour of its own. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="64dp"
-    android:background="?android:attr/colorBackground"
-    android:elevation="6dp">
+    android:layout_height="wrap_content"
+    android:elevation="8dp">
+
+    <!-- Top edge: a hairline that lifts the bar off the list behind it. Drawn first so
+         the progress hairline below stays on top of it. -->
+    <View
+        android:id="@+id/mini_divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_gravity="top"
+        android:importantForAccessibility="no" />
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp">
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="10dp">
 
         <ImageView
             android:id="@+id/mini_art"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:scaleType="centerCrop"
-            android:contentDescription="Album art" />
+            android:contentDescription="Album art"
+            android:importantForAccessibility="no" />
 
-        <TextView
-            android:id="@+id/mini_title"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:singleLine="true"
-            android:text="Nothing playing"
-            android:textColor="?android:attr/textColorPrimary"
-            android:textSize="15sp" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/mini_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="Nothing playing"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/mini_artist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="13sp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/mini_play_pause"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
             android:clickable="true"
-            android:contentDescription="Play or pause"
             android:focusable="true"
             android:gravity="center"
             android:text="▶"
@@ -59,6 +92,7 @@
         android:layout_width="match_parent"
         android:layout_height="2dp"
         android:layout_gravity="top"
+        android:layout_marginTop="1dp"
         android:background="#FFFFC107"
         android:importantForAccessibility="no"
         android:pivotX="0"
