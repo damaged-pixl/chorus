@@ -10,6 +10,7 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.media3.common.Player
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -36,14 +37,17 @@ class QueuePanel @JvmOverloads constructor(
     private val nowPlaying: TextView
     private val listView: RecyclerView
 
-    private val adapter = QueueAdapter { position ->
-        PlayerHolder.whenReady { c ->
-            if (position in 0 until c.mediaItemCount) {
-                c.seekTo(position, 0L)
-                c.play()
+    private val adapter = QueueAdapter(
+        onRowClick = { position ->
+            PlayerHolder.whenReady { c ->
+                if (position in 0 until c.mediaItemCount) {
+                    c.seekTo(position, 0L)
+                    c.play()
+                }
             }
-        }
-    }
+        },
+        onRowLongClick = { position, title -> showRowOptions(position, title) }
+    )
 
     private var observing = false
 
@@ -176,13 +180,57 @@ class QueuePanel @JvmOverloads constructor(
     /**
      * Cheap identity of the current queue contents. PlayerHolder replaces the whole queue at
      * once, so count + first + last + current is enough to notice a change without walking
-     * every item on every playback event.
+     * every item on every playback event. It deliberately cannot see an interior reorder —
+     * moveItem/removeItem clear [contentSignature] so the next event rebuilds the rows.
      */
     private fun queueSignature(player: Player, count: Int): String {
         val first = player.getMediaItemAt(0).mediaId
         val last = player.getMediaItemAt(count - 1).mediaId
         val current = player.currentMediaItem?.mediaId.orEmpty()
         return "$count|$first|$last|$current"
+    }
+
+    // ---------------------------------------------------------------- queue editing
+
+    /** Long-press options for one queue row: reorder or remove. */
+    private fun showRowOptions(position: Int, title: String) {
+        val options = arrayOf("Move up", "Move down", "Remove from queue")
+        AlertDialog.Builder(context)
+            .setTitle(title)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> moveItem(position, position - 1)
+                    1 -> moveItem(position, position + 1)
+                    else -> removeItem(position)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Swap one row through the real controller ([Player] owns moveMediaItem), so the
+     * queue the notification and lock screen see is the same one on screen. Bounds are
+     * checked against the live count, which makes an edge move a harmless no-op.
+     */
+    private fun moveItem(from: Int, to: Int) {
+        PlayerHolder.whenReady { c ->
+            if (from != to && from in 0 until c.mediaItemCount && to in 0 until c.mediaItemCount) {
+                c.moveMediaItem(from, to)
+                contentSignature = null   // interior moves are invisible to the signature
+            }
+        }
+    }
+
+    private fun removeItem(position: Int) {
+        PlayerHolder.whenReady { c ->
+            if (position in 0 until c.mediaItemCount) {
+                // Removing the current item is Media3's own problem (playback slides to
+                // whatever now sits in its slot); here we only force the row rebuild.
+                c.removeMediaItem(position)
+                contentSignature = null
+            }
+        }
     }
 
     // ---------------------------------------------------------------- adapter
@@ -198,9 +246,14 @@ class QueuePanel @JvmOverloads constructor(
      * Queue rows reuse the shared `item_track` layout (art + title + "artist — album" +
      * right-hand slot). The right-hand slot shows the 1-based queue position; the current item
      * is marked with a "▶" prefix and full opacity.
+     *
+     * A long press opens the row's options sheet (move up / move down / remove) — the same
+     * pattern the playlist screens use, so the dense row needs no extra per-row buttons
+     * (which would not fit a 360dp screen, nor cycle mode's 72dp targets).
      */
     private inner class QueueAdapter(
-        private val onRowClick: (Int) -> Unit
+        private val onRowClick: (Int) -> Unit,
+        private val onRowLongClick: (Int, String) -> Unit
     ) : RecyclerView.Adapter<QueueAdapter.VH>() {
 
         private val items = ArrayList<QueueRow>()
@@ -261,6 +314,17 @@ class QueuePanel @JvmOverloads constructor(
                 itemView.setOnClickListener {
                     val p = bindingAdapterPosition
                     if (p != RecyclerView.NO_POSITION) onRowClick(p)
+                }
+                // Returning true swallows the release, so the tap that ends a long
+                // press never also seeks to the row.
+                itemView.setOnLongClickListener {
+                    val p = bindingAdapterPosition
+                    if (p != RecyclerView.NO_POSITION) {
+                        onRowLongClick(p, row.title)
+                        true
+                    } else {
+                        false
+                    }
                 }
             }
         }
