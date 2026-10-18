@@ -40,8 +40,8 @@ class TrackAdapter(
      * The favourite star owns its own wiring: its state is read from [Favourites] at bind
      * time and a tap toggles it, so every list built on this adapter (tracks, search,
      * playlist detail, Favourites) gets the star for free. External changes re-bind only
-     * while this adapter is attached to a RecyclerView, which pairs add/remove with the
-     * view lifecycle — a destroyed Activity's adapter is never leaked into the list.
+     * while the adapter is observing — see [observeFavourites] for why the host, not the
+     * adapter, owns that window.
      */
     private val favouriteListener: (Long, Boolean) -> Unit = { trackId, _ ->
         if (trackId == Favourites.ALL) {
@@ -54,6 +54,8 @@ class TrackAdapter(
         }
     }
 
+    private var observingFavourites = false
+
     /** Replace the contents and rebind. */
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Track>) {
@@ -62,14 +64,29 @@ class TrackAdapter(
         notifyDataSetChanged()
     }
 
-    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
-        super.onAttachedToRecyclerView(recyclerView)
+    /**
+     * Start re-binding stars when [Favourites] changes. Pair with
+     * [stopObservingFavourites] in the *host's* lifecycle — Activity
+     * `onCreate`/`onDestroy`, or a view's `onAttachedToWindow`/`onDetachedFromWindow`.
+     * Idempotent.
+     *
+     * The adapter deliberately does not do this itself from
+     * `onAttachedToRecyclerView`/`onDetachedFromRecyclerView`: RecyclerView only calls
+     * those on an adapter swap (`setAdapter`), never on window detach or Activity
+     * destroy, so every `recreate()` appended another dead adapter to the static
+     * `Favourites.listeners` for the life of the process.
+     */
+    fun observeFavourites() {
+        if (observingFavourites) return
+        observingFavourites = true
         Favourites.addListener(favouriteListener)
     }
 
-    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+    /** Undo [observeFavourites]. Safe to call when it was never observing. */
+    fun stopObservingFavourites() {
+        if (!observingFavourites) return
+        observingFavourites = false
         Favourites.removeListener(favouriteListener)
-        super.onDetachedFromRecyclerView(recyclerView)
     }
 
     override fun getItemCount(): Int = items.size

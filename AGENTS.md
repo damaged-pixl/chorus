@@ -81,10 +81,15 @@ property is a read-only view for observers (SleepTimer); mutations go via `whenR
 - **Play counts increment in `PlaybackService.onMediaItemTransition`** — that callback
   fires only on real track changes (never on pause/resume or in-track seeks), which is
   why the counts are right. Don't also count from the UI side.
-- **`TrackAdapter` renders the favourite star from the `Favourites` singleton and
-  listens only while attached** (`onAttachedToRecyclerView`/`onDetachedFromRecyclerView`
-  are its leak-safe pairing — don't break it). `Favourites`/`SleepTimer` listeners
-  registered anywhere else must be removed in onDestroy or the matching detach.
+- **`Favourites` listeners are held strongly in a static list** — every add needs a
+  matching remove or it is leaked for the life of the process. The pairing is the *host's*
+  lifecycle: Activity `onCreate`/`onDestroy` (MainActivity's track list) or a view's
+  `onAttachedToWindow`/`onDetachedFromWindow` (`PlayerPanel`, `PlaylistPanel`,
+  `SearchPanel`). `TrackAdapter.observeFavourites()`/`stopObservingFavourites()` is driven
+  by whichever host owns it. **`onAttachedToRecyclerView`/`onDetachedFromRecyclerView` is
+  NOT a leak-safe pair** — RecyclerView only calls those on an adapter swap, never on
+  window detach or Activity destroy, so `recreate()` (cycle-mode toggle) leaked an adapter
+  per recreation. Never register from an adapter's own RecyclerView hooks again.
 - **QueuePanel's queue signature (count|first|last|current) cannot see interior
   reorders** — `moveItem`/`removeItem` clear `contentSignature` to force the next
   player event to rebuild the rows. Keep that pattern for any further queue editing.

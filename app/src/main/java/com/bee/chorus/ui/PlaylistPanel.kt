@@ -192,11 +192,15 @@ class PlaylistPanel @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        // Paired with the window below: RecyclerView's own detach hooks never fire on
+        // Activity destroy, so they cannot be the pairing here.
+        adapter.observeFavourites()
         Favourites.addListener(favouritesListener)
     }
 
     override fun onDetachedFromWindow() {
         // Paired add/remove with the window: a destroyed Activity leaks no listener.
+        adapter.stopObservingFavourites()
         Favourites.removeListener(favouritesListener)
         super.onDetachedFromWindow()
     }

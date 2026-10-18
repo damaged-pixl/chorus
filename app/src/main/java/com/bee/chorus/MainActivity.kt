@@ -284,6 +284,12 @@ class MainActivity : AppCompatActivity() {
         queuePanel = findViewById(R.id.queue_panel)
         miniPlayer = findViewById(R.id.mini_player)
 
+        // The track list's stars follow the Favourites singleton. Paired with onDestroy
+        // below, because this adapter is owned by the Activity, not by a view that can
+        // hook its own window attach/detach. Search and playlist panels do the same in
+        // their own onAttachedToWindow/onDetachedFromWindow.
+        trackAdapter.observeFavourites()
+
         // Tapping the mini player opens the full-screen player.
         miniPlayer.setOnClickListener { PlayerActivity.start(this) }
 
@@ -497,6 +503,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        // Undo the Activity-lifetime pairing from wireLists. Favourites holds listeners
+        // strongly and statically, so anything not removed here is leaked for good —
+        // including across every recreate() from the cycle-mode toggle.
+        trackAdapter.stopObservingFavourites()
         super.onDestroy()
         io.shutdown()
     }

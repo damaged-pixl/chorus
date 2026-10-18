@@ -152,9 +152,16 @@ class SearchPanel @JvmOverloads constructor(
             t.artist.contains(needle, ignoreCase = true) ||
             t.album.contains(needle, ignoreCase = true)
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // Paired with the detach below, so a destroyed Activity leaks no star listener.
+        adapter.observeFavourites()
+    }
+
     override fun onDetachedFromWindow() {
         // Drop any queued keystroke so a detached panel cannot fire a late update.
         main.removeCallbacks(debounce)
+        adapter.stopObservingFavourites()
         super.onDetachedFromWindow()
     }
 

@@ -18,10 +18,14 @@ import java.util.concurrent.ThreadFactory
  *
  * [set] updates the cache and notifies listeners immediately (both on the calling
  * thread's data, notification posted to the main thread) and writes to the database
- * asynchronously — a star tap never blocks the UI. All listeners are held strongly:
- * they are removed by view lifecycle hooks (`onAttachedToRecyclerView`,
- * `onDetachedFromWindow`), so **anything registering one outside those hooks must
- * remove it in the Activity's onDestroy** to avoid leaking it across `recreate()`.
+ * asynchronously — a star tap never blocks the UI. All listeners are held strongly, and
+ * [listeners] is static, so **every registration must be removed** or it is leaked for the
+ * life of the process. Pair add/remove with the host's own lifecycle: an Activity's
+ * onCreate/onDestroy (`MainActivity`, `PlayerActivity`) or a view's
+ * `onAttachedToWindow`/`onDetachedFromWindow` (`PlayerPanel`, `PlaylistPanel`,
+ * `SearchPanel`, and `TrackAdapter` driven by whichever of those hosts it).
+ * `onAttachedToRecyclerView`/`onDetachedFromRecyclerView` are NOT such a pair —
+ * RecyclerView only calls those on an adapter swap, never on Activity destroy.
  */
 object Favourites {
 
