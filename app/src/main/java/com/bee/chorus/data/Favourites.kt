@@ -51,8 +51,12 @@ object Favourites {
         store = PlaylistStore(ctx.applicationContext)
         io.execute {
             val s = store ?: return@execute
-            // LinkedHashSet so iteration order is "order first starred", matching a
-            // star-toggle order (appending keeps it; removal preserves it).
+            // LinkedHashSet so the set has a stable iteration order for callers (the
+            // Favourites pseudo-playlist renders in it). That order is *not* a star-time
+            // order: favouriteIds() reads `ORDER BY rowid ASC` and track_id IS the rowid
+            // (INTEGER PRIMARY KEY, no AUTOINCREMENT), so a fresh load yields ascending
+            // MediaStore id. Starring later appends at the end, and un-star/re-star never
+            // reorders anything — there is no starred_at column to order by.
             ids = LinkedHashSet(s.favouriteIds())
             // "Everything changed" broadcast: any list already on screen re-binds its stars.
             main.post { for (l in listeners) l(ALL, false) }
@@ -62,7 +66,12 @@ object Favourites {
     /** True if [trackId] is starred. Cheap — reads the in-memory set only. */
     fun isFavourite(trackId: Long): Boolean = ids.contains(trackId)
 
-    /** The whole set, ordered by first-starred. Snapshot copy semantics: iterate freely. */
+    /** The whole set. Snapshot copy semantics: iterate freely.
+     *
+     *  Iteration order is the in-memory LinkedHashSet's: ascending MediaStore id straight
+     *  after the initial load (see [init]), then whatever order stars have since been
+     *  appended in. It is never a star-time order, and nothing here re-sorts on toggle.
+     */
     fun ids(): Set<Long> = ids
 
     /** Star or un-star [trackId] and broadcast the change. Main thread only (UI action). */

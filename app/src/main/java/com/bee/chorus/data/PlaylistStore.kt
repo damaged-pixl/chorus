@@ -145,7 +145,12 @@ class PlaylistStore(context: Context) :
 
     // ---------------------------------------------------------------- favourites
 
-    /** Starred track ids, in the order they were first starred. */
+    /** Starred track ids, ascending MediaStore id.
+     *
+     *  `track_id INTEGER PRIMARY KEY` makes it the rowid, so `rowid ASC` is `track_id ASC`.
+     *  There is no timestamp column, so this is not a star-time order: un-star and re-star
+     *  leave a track exactly where it was.
+     */
     fun favouriteIds(): List<Long> {
         val out = ArrayList<Long>()
         readableDatabase.query(
