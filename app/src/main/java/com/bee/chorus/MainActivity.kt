@@ -18,6 +18,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.data.Album
+import com.bee.chorus.data.Favourites
 import com.bee.chorus.data.LibraryReader
 import com.bee.chorus.data.PlaylistStore
 import com.bee.chorus.data.Settings
@@ -77,6 +78,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         store = PlaylistStore(this)
+        Favourites.init(this)
         PlayerHolder.bind(this)
 
         wireLists()
@@ -204,6 +206,9 @@ class MainActivity : AppCompatActivity() {
         // Tapping the mini player opens the full-screen player.
         miniPlayer.setOnClickListener { PlayerActivity.start(this) }
 
+        // Favourites: pseudo-playlist detail, same panel as a real playlist.
+        findViewById<Button>(R.id.fav_playlist).setOnClickListener { openFavourites() }
+
         // Playlists: create.
         findViewById<Button>(R.id.new_playlist).setOnClickListener {
             val input = EditText(this).apply { hint = "Playlist name" }
@@ -226,6 +231,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun openPlaylist(id: Long, name: String) {
         playlistPanel.open(id, name)
+        show(R.id.playlist_panel)
+    }
+
+    private fun openFavourites() {
+        playlistPanel.openFavourites()
         show(R.id.playlist_panel)
     }
 

@@ -121,6 +121,16 @@
             android:orientation="vertical"
             android:visibility="gone">
 
+            <!-- Favourites: a pseudo-playlist over the favourites set, not a row in the
+                 playlists table — so it lives outside PlaylistAdapter and cannot be
+                 renamed or deleted with a real playlist. -->
+            <Button
+                android:id="@+id/fav_playlist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="★ Favourites" />
+
             <Button
                 android:id="@+id/new_playlist"
                 android:layout_width="match_parent"

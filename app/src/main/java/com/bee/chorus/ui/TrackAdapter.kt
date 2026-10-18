@@ -13,6 +13,7 @@ import android.widget.TextView
 import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.R
+import com.bee.chorus.data.Favourites
 import com.bee.chorus.data.Track
 
 /**
@@ -35,12 +36,40 @@ class TrackAdapter(
 
     private val items = ArrayList<Track>()
 
+    /**
+     * The favourite star owns its own wiring: its state is read from [Favourites] at bind
+     * time and a tap toggles it, so every list built on this adapter (tracks, search,
+     * playlist detail, Favourites) gets the star for free. External changes re-bind only
+     * while this adapter is attached to a RecyclerView, which pairs add/remove with the
+     * view lifecycle — a destroyed Activity's adapter is never leaked into the list.
+     */
+    private val favouriteListener: (Long, Boolean) -> Unit = { trackId, _ ->
+        if (trackId == Favourites.ALL) {
+            notifyDataSetChanged()
+        } else {
+            // Only the rows showing this track changed; re-bind exactly those.
+            for (i in items.indices) {
+                if (items[i].id == trackId) notifyItemChanged(i)
+            }
+        }
+    }
+
     /** Replace the contents and rebind. */
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Track>) {
         items.clear()
         items.addAll(list)
         notifyDataSetChanged()
+    }
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        Favourites.addListener(favouriteListener)
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        Favourites.removeListener(favouriteListener)
+        super.onDetachedFromRecyclerView(recyclerView)
     }
 
     override fun getItemCount(): Int = items.size
@@ -55,6 +84,11 @@ class TrackAdapter(
         private val title: TextView = view.findViewById(R.id.title)
         private val subtitle: TextView = view.findViewById(R.id.subtitle)
         private val duration: TextView = view.findViewById(R.id.duration)
+        private val star: TextView = view.findViewById(R.id.track_star)
+
+        /** Off-star tint, resolved once per recycled holder, not per bind. */
+        private val starOffColor =
+            themeColor(view.context, android.R.attr.textColorSecondary, 0x99FFFFFF.toInt())
 
         init {
             // Why in code, not a drawable resource: the row owns its own corner radius,
@@ -79,6 +113,12 @@ class TrackAdapter(
                     false
                 }
             }
+            // The star consumes its own taps (it is clickable), so toggling never also
+            // fires the row's play action. Resolves its own position like the others.
+            star.setOnClickListener {
+                val p = bindingAdapterPosition
+                if (p != RecyclerView.NO_POSITION) items.getOrNull(p)?.let { Favourites.toggle(it.id) }
+            }
         }
 
         fun bind(t: Track) {
@@ -93,6 +133,15 @@ class TrackAdapter(
 
             duration.text = formatDuration(t.durationMs)
             Art.load(itemView.context, art, t.albumArtUri, ART_PX, lowMem = true)
+
+            // Favourite star: shown (the layout defaults it to gone so QueuePanel's copy
+            // of this row stays untouched) and tinted from the shared Favourites set.
+            val liked = Favourites.isFavourite(t.id)
+            star.visibility = View.VISIBLE
+            star.text = if (liked) STAR_ON else STAR_OFF
+            star.setTextColor(if (liked) STAR_ON_COLOR else starOffColor)
+            star.contentDescription =
+                if (liked) "Favourite, tap to remove" else "Not a favourite, tap to add"
         }
     }
 
@@ -111,6 +160,11 @@ class TrackAdapter(
         const val SEPARATOR = "  •  "
         const val UNKNOWN_TITLE = "Unknown title"
         const val UNKNOWN_DURATION = "--:--"
+
+        // Favourite star glyphs and the accent tint for "on" (same amber as the player).
+        const val STAR_ON = "★"
+        const val STAR_OFF = "☆"
+        const val STAR_ON_COLOR = 0xFFFFC107.toInt()
 
         /**
          * Joins only the non-empty parts with [SEPARATOR], so a missing year or album

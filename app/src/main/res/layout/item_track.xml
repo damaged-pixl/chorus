@@ -74,4 +74,21 @@
         android:includeFontPadding="false"
         android:fontFeatureSettings="tnum"
         android:textColor="?android:attr/textColorSecondary" />
+
+    <!-- Favourite star. Hidden by default so QueuePanel (which inflates this same
+         layout) stays untouched; TrackAdapter shows and binds it. Clickable so the
+         tap is consumed here and never also triggers the row's play action. -->
+    <TextView
+        android:id="@+id/track_star"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:minWidth="34dp"
+        android:gravity="center"
+        android:clickable="true"
+        android:focusable="true"
+        android:textSize="18sp"
+        android:includeFontPadding="false"
+        android:textColor="?android:attr/textColorSecondary"
+        android:visibility="gone" />
 </LinearLayout>

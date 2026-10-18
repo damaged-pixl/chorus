@@ -8,9 +8,14 @@ import android.database.sqlite.SQLiteOpenHelper
 /**
  * Local playlists. Plain SQLite (no Room) to keep the build and runtime light.
  * Tracks are referenced by their stable MediaStore id, so nothing is copied.
+ *
+ * Also holds the favourites set (`favourites` table, added in schema v2). Note that
+ * several instances of this helper may exist at once (MainActivity owns one, the
+ * [Favourites] facade and PlaybackService each open their own with the application
+ * context) — Android's SQLiteDatabase pools connections per file path, so that is safe.
  */
 class PlaylistStore(context: Context) :
-    SQLiteOpenHelper(context, Library.PLAYLIST_DB, null, 1) {
+    SQLiteOpenHelper(context, Library.PLAYLIST_DB, null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -27,9 +32,16 @@ class PlaylistStore(context: Context) :
                 PRIMARY KEY(playlist_id, track_id))"""
         )
         db.execSQL("CREATE INDEX idx_ptracks_pid ON playlist_tracks(playlist_id, position)")
+        db.execSQL("CREATE TABLE favourites(track_id INTEGER PRIMARY KEY)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) = Unit
+    /**
+     * Real migrations, one per schema bump:
+     *  v1 -> v2 added the `favourites` table.
+     */
+    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
+        if (old < 2) db.execSQL("CREATE TABLE IF NOT EXISTS favourites(track_id INTEGER PRIMARY KEY)")
+    }
 
     fun createPlaylist(name: String): Long {
         val cv = ContentValues().apply {
@@ -111,5 +123,29 @@ class PlaylistStore(context: Context) :
         readableDatabase.rawQuery(
             "SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id=?", arrayOf(playlistId.toString())
         ).use { c -> return if (c.moveToFirst()) c.getInt(0) else 0 }
+    }
+
+    // ---------------------------------------------------------------- favourites
+
+    /** Starred track ids, in the order they were first starred. */
+    fun favouriteIds(): List<Long> {
+        val out = ArrayList<Long>()
+        readableDatabase.query(
+            "favourites", arrayOf("track_id"), null, null, null, null, "rowid ASC"
+        ).use { c -> while (c.moveToNext()) out.add(c.getLong(0)) }
+        return out
+    }
+
+    /** Add or drop a track from the favourites set. */
+    fun setFavourite(trackId: Long, on: Boolean) {
+        if (on) {
+            val cv = ContentValues().apply { put("track_id", trackId) }
+            // Ignore an existing row — favourites are a set, not a list.
+            writableDatabase.insertWithOnConflict(
+                "favourites", null, cv, SQLiteDatabase.CONFLICT_IGNORE
+            )
+        } else {
+            writableDatabase.delete("favourites", "track_id=?", arrayOf(trackId.toString()))
+        }
     }
 }

@@ -24,6 +24,7 @@ import android.widget.TextView
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.bee.chorus.R
+import com.bee.chorus.data.Favourites
 import com.bee.chorus.playback.PlayerHolder
 import java.util.Locale
 
@@ -60,6 +61,7 @@ class PlayerPanel @JvmOverloads constructor(
     private val nextButton: TextView
     private val shuffleButton: TextView
     private val repeatButton: TextView
+    private val starButton: TextView
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -70,6 +72,8 @@ class PlayerPanel @JvmOverloads constructor(
     private val repeatIdleBg = pill(0x1FFFFFFF, BORDER_IDLE)
     private val repeatAllBg = pill(0x66FFC107, 0)
     private val repeatOneBg = pill(ACCENT, 0)
+    private val starIdleBg = pill(0x1FFFFFFF, BORDER_IDLE)
+    private val starOnBg = pill(0x66FFC107, 0)
 
     private var attached = false
     private var scrubbing = false
@@ -78,11 +82,19 @@ class PlayerPanel @JvmOverloads constructor(
     private var tickScheduled = false
     private var lastShuffleOn: Boolean? = null
     private var lastRepeatMode = -1
+    private var lastStarId: Long? = null
+    private var lastStarOn: Boolean? = null
     private var measuredSide = -1
 
     // Held as a property so the *same* instance can be handed back to removePlayerListener,
     // which removes by identity.
     private val playerListener: (Player) -> Unit = { player -> render(player) }
+
+    // Same identity trick for the Favourites listener: re-render only the star, since a
+    // favourite can change (from the track list) without any player event at all.
+    private val favouritesListener: (Long, Boolean) -> Unit = { _, _ ->
+        lastPlayer?.let { renderStar(it) }
+    }
 
     init {
         LayoutInflater.from(context).inflate(R.layout.view_player, this, true)
@@ -104,6 +116,7 @@ class PlayerPanel @JvmOverloads constructor(
         nextButton = findViewById(R.id.player_next)
         shuffleButton = findViewById(R.id.player_shuffle)
         repeatButton = findViewById(R.id.player_repeat)
+        starButton = findViewById(R.id.player_star)
 
         styleScrim()
         styleArt()
@@ -121,6 +134,7 @@ class PlayerPanel @JvmOverloads constructor(
         if (attached) return
         attached = true
         PlayerHolder.addPlayerListener(playerListener)
+        Favourites.addListener(favouritesListener)
         if (lastPlayer?.isPlaying == true) scheduleTick()
     }
 
@@ -129,6 +143,7 @@ class PlayerPanel @JvmOverloads constructor(
         if (attached) {
             attached = false
             PlayerHolder.removePlayerListener(playerListener)
+            Favourites.removeListener(favouritesListener)
         }
         stopTick()
     }
@@ -338,6 +353,7 @@ class PlayerPanel @JvmOverloads constructor(
         renderProgress(player)
         renderTransport(player)
         renderModes(player)
+        renderStar(player)
 
         // Keep the position fresh while audio is actually advancing.
         if (player.isPlaying) scheduleTick() else stopTick()
@@ -431,6 +447,36 @@ class PlayerPanel @JvmOverloads constructor(
         view.alpha = if (enabled) 1f else DISABLED_ALPHA
     }
 
+    /**
+     * Favourite star for the current track. Guarded on (track, liked) like the mode pills,
+     * so the 500 ms tick's event storm never re-sets text or backgrounds needlessly.
+     * The id doubles as the toggle target for the click handler.
+     */
+    private fun renderStar(player: Player) {
+        val id = player.currentMediaItem?.mediaId?.toLongOrNull()
+        if (id == null) {
+            if (lastStarId != null || lastStarOn != null) {
+                lastStarId = null
+                lastStarOn = null
+                starButton.text = GLYPH_STAR_OFF
+                starButton.setBackground(starIdleBg)
+                starButton.setTextColor(MUTED_TEXT)
+                starButton.contentDescription = "No track to favourite"
+            }
+            return
+        }
+        val liked = Favourites.isFavourite(id)
+        if (id != lastStarId || liked != lastStarOn) {
+            lastStarId = id
+            lastStarOn = liked
+            starButton.text = if (liked) GLYPH_STAR_ON else GLYPH_STAR_OFF
+            starButton.setBackground(if (liked) starOnBg else starIdleBg)
+            starButton.setTextColor(if (liked) ACCENT_TEXT else MUTED_TEXT)
+            starButton.contentDescription =
+                if (liked) "Favourite, tap to remove" else "Not a favourite, tap to add"
+        }
+    }
+
     // ---------------------------------------------------------------- wiring
 
     private fun wireSeekBar() {
@@ -493,6 +539,13 @@ class PlayerPanel @JvmOverloads constructor(
         shuffleButton.setOnClickListener { PlayerHolder.toggleShuffle() }
 
         repeatButton.setOnClickListener { PlayerHolder.cycleRepeat() }
+
+        starButton.setOnClickListener {
+            // Toggling notifies Favourites listeners, which comes straight back here
+            // (favouritesListener) — so the pill flips without touching the player.
+            val id = lastStarId ?: return@setOnClickListener
+            Favourites.toggle(id)
+        }
     }
 
     // ---------------------------------------------------------------- ticker
@@ -552,6 +605,8 @@ class PlayerPanel @JvmOverloads constructor(
         const val GLYPH_REPEAT_OFF = "⇄"
         const val GLYPH_REPEAT_ALL = "🔁"
         const val GLYPH_REPEAT_ONE = "🔂"
+        const val GLYPH_STAR_ON = "★"
+        const val GLYPH_STAR_OFF = "☆"
 
         // One accent, reused for the seek fill and the active mode pills, so the screen reads
         // as a single system rather than a bag of colours.

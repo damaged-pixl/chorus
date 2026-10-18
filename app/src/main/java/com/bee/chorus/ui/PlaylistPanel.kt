@@ -11,6 +11,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.R
+import com.bee.chorus.data.Favourites
 import com.bee.chorus.data.PlaylistStore
 import com.bee.chorus.data.Track
 import com.bee.chorus.playback.PlayerHolder
@@ -138,6 +139,17 @@ class PlaylistPanel @JvmOverloads constructor(
         refresh()
     }
 
+    /**
+     * Show the Favourites pseudo-playlist: the shared [Favourites] set resolved against
+     * the library, kept live while the panel is on screen (a star toggled anywhere —
+     * including from the full-screen player — refreshes this list).
+     */
+    fun openFavourites() {
+        playlistId = FAVOURITES
+        playlistName = FAVOURITES_NAME
+        refresh()
+    }
+
     /** Clear the panel back to its empty state (no playlist selected). */
     fun close() {
         playlistId = NO_PLAYLIST
@@ -159,10 +171,12 @@ class PlaylistPanel @JvmOverloads constructor(
         nameView.text = playlistName.ifBlank { UNTITLED_PLAYLIST }
 
         val s = store
-        tracks = if (s == null) {
-            emptyList()
-        } else {
-            s.trackIdsIn(playlistId).mapNotNull { library[it] }
+        tracks = when {
+            // Favourites read through the shared facade (its in-memory set is always
+            // ahead of the async database write a star tap just queued).
+            playlistId == FAVOURITES -> Favourites.ids().mapNotNull { library[it] }
+            s == null -> emptyList()
+            else -> s.trackIdsIn(playlistId).mapNotNull { library[it] }
         }
 
         countView.text = if (tracks.size == 1) "1 track" else "${tracks.size} tracks"
@@ -170,17 +184,43 @@ class PlaylistPanel @JvmOverloads constructor(
         updateButtons()
     }
 
-    /** The tracks currently listed, in playlist order. */
+    /** Tracks currently listed, in playlist order. */
     fun tracks(): List<Track> = tracks
 
     /** Id of the playlist on screen, or [NO_PLAYLIST] when closed. */
     fun currentPlaylistId(): Long = playlistId
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        Favourites.addListener(favouritesListener)
+    }
+
+    override fun onDetachedFromWindow() {
+        // Paired add/remove with the window: a destroyed Activity leaks no listener.
+        Favourites.removeListener(favouritesListener)
+        super.onDetachedFromWindow()
+    }
+
     // ---------------------------------------------------------------- internals
 
+    /**
+     * Favourites can change while this panel is on screen (a star tapped in the track
+     * list or the full-screen player), so the pseudo-playlist keeps itself in step.
+     */
+    private val favouritesListener: (Long, Boolean) -> Unit = { _, _ ->
+        if (playlistId == FAVOURITES) refresh()
+    }
+
     private fun removeAt(position: Int) {
-        val s = store ?: return
         val track = tracks.getOrNull(position) ?: return
+        if (playlistId == FAVOURITES) {
+            // Long-press inside Favourites un-stars (there is no "playlist" to remove
+            // from). The Favourites listener refreshes the list after the change.
+            ignoreClicksUntil = SystemClock.elapsedRealtime() + CLICK_SUPPRESS_MS
+            Favourites.set(track.id, false)
+            return
+        }
+        val s = store ?: return
         s.removeTrack(playlistId, track.id)
         // Swallow the click that ends the long-press gesture.
         ignoreClicksUntil = SystemClock.elapsedRealtime() + CLICK_SUPPRESS_MS
@@ -199,6 +239,13 @@ class PlaylistPanel @JvmOverloads constructor(
         /** Sentinel id used while no playlist is selected. */
         const val NO_PLAYLIST = -1L
 
+        /**
+         * Synthetic id for the Favourites pseudo-playlist. Real playlist ids come from
+         * AUTOINCREMENT and are always positive, so a negative id can never collide.
+         */
+        const val FAVOURITES = -2L
+
+        private const val FAVOURITES_NAME = "Favourites"
         private const val CLICK_SUPPRESS_MS = 700L
         private const val DISABLED_ALPHA = 0.4f
         private const val UNTITLED_PLAYLIST = "Playlist"

@@ -260,6 +260,24 @@
                 android:text="⇄"
                 android:textColor="#99FFFFFF"
                 android:textSize="20sp" />
+
+            <!-- Favourite star for the current track. Wrap width (a small glyph), so the
+                 row's two 104dp pills plus this still fit a 360dp screen. -->
+            <TextView
+                android:id="@+id/player_star"
+                android:layout_width="wrap_content"
+                android:layout_height="52dp"
+                android:layout_marginStart="16dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:contentDescription="Not a favourite"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:text="☆"
+                android:textColor="#99FFFFFF"
+                android:textSize="20sp" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>
