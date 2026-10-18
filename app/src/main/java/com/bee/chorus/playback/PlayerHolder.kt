@@ -76,7 +76,11 @@ object PlayerHolder {
         binding = false
         c.addListener(object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
-                playerListeners.forEach { it(player) }
+                // Drain a copy: a listener may remove itself from inside its own callback
+                // (SleepTimer.onEndOfTrack -> disarm -> removePlayerListener). ArrayList
+                // remove doesn't bump modCount, so there is no ConcurrentModificationException
+                // - but the in-flight iterator would skip the next listener.
+                playerListeners.toList().forEach { it(player) }
             }
         })
         val pending = readyActions.toList()

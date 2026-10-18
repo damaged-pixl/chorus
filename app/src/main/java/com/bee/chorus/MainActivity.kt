@@ -211,14 +211,17 @@ class MainActivity : AppCompatActivity() {
             else -> io.execute {
                 val stats = store.playStats()
                 // Unplayed tracks (0 / never) sort last; ties break A–Z for a stable list.
+                // The tie-break uses CASE_INSENSITIVE_ORDER rather than `lowercase()`:
+                // the selector runs per comparison, and allocating two Strings each time
+                // churned ~120k short-lived strings per sort of a 5k library.
                 val sorted = when (sortMode) {
                     SORT_PLAYS -> library.sortedWith(
                         compareByDescending<Track> { stats[it.id]?.plays ?: 0 }
-                            .thenBy { it.title.lowercase() }
+                            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
                     )
                     else -> library.sortedWith(
                         compareByDescending<Track> { stats[it.id]?.lastPlayed ?: 0L }
-                            .thenBy { it.title.lowercase() }
+                            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
                     )
                 }
                 runOnUiThread { trackAdapter.submit(sorted) }
