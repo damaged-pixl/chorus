@@ -2,31 +2,45 @@
 <!-- Full-screen player. Framework widgets only: no Material, no icon assets, no shipped
      bitmaps, no fonts. Glyphs are literal Unicode.
 
-     Anything that needs a real drawable (rounded corners, gradient scrim, seek-bar track and
-     thumb, ripple, mode pills) is built in PlayerPanel.kt from GradientDrawable/RippleDrawable/
-     LayerDrawable so this file stays asset-free — a few hundred bytes of code, zero APK bytes.
+     Anything that needs a real drawable (the art mat's rounded corners, the backdrop scrim,
+     the seek-bar track/buffered/progress layers and thumb, the ripples, the mode pills, the
+     scrub preview) is built in PlayerPanel.kt from GradientDrawable/StateListDrawable/
+     RippleDrawable/LayerDrawable, so this file stays asset-free — a few hundred bytes of
+     code, zero APK bytes.
+
+     Colours come from the *theme* (?android:attr/... in XML, the Ui helpers in Kotlin), so
+     the screen follows the light, dark and Cycle palettes with nothing hard-coded. The one
+     exception is the dark mat the artwork sits on, drawn in code (a sleeve reads as a
+     dark card on a light page instead of washing out).
 
      Root is a FrameLayout so the artwork-derived backdrop can sit behind the content column.
      The content column is a vertical LinearLayout: no ConstraintLayout dependency.
+
+     Height budget, which is why the rows are shaped this way: the art card takes whatever is
+     left and PlayerPanel.onMeasure squares it, while CycleMode later raises *every*
+     clickable target to 72dp. A row holding five controls would then need 360dp and
+     overflow a 360dp screen, so the two 10-second skips flank the scrubber (three items in
+     that row) and the transport row is the big prev / play-pause / next trio.
 
      Insets: none applied here — PlayerActivity pads the content view itself. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FF07070A">
+    android:background="?android:attr/colorBackground">
 
     <!-- Backdrop: a 64px decode of the current artwork, stretched to fill. Reads as a soft
-         colour wash, costs ~16 KB of RAM. Loaded by Art.load, never a full-size bitmap. -->
+         colour wash behind the card, costs ~16 KB of RAM. Alpha and the legibility scrim are
+         set in PlayerPanel.kt; loaded by Art.load, never a full-size bitmap. -->
     <ImageView
         android:id="@+id/player_backdrop"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:alpha="0.9"
         android:importantForAccessibility="no"
         android:scaleType="centerCrop" />
 
-    <!-- Legibility scrim. Transparent at the top so the backdrop stays visible, opaque at the
-         bottom so text and controls read on a bright sleeve. Gradient set in Kotlin. -->
+    <!-- Legibility scrim: clear at the top so the wash stays visible, opaque page colour at
+         the bottom so title, times and controls read over a bright sleeve. Gradient set in
+         Kotlin from the theme's window background. -->
     <View
         android:id="@+id/player_scrim"
         android:layout_width="match_parent"
@@ -44,11 +58,13 @@
         android:paddingEnd="24dp"
         android:paddingBottom="20dp">
 
-        <!-- Artwork. Height is forced to a square by PlayerPanel.onMeasure so the image is
-             never squashed and rarely cropped; rounded corners + drop shadow are applied there
-             too (ViewOutlineProvider), which costs no drawable resource. -->
+        <!-- The hero. A dark mat with rounded corners and a real drop shadow, so the
+             artwork is the one thing on the page that reads as a physical object in both
+             palettes. Height is forced to a square by PlayerPanel.onMeasure; the mat's
+             colour, corners and elevation are applied there too, which costs no drawable
+             resource. -->
         <FrameLayout
-            android:id="@+id/player_art_frame"
+            android:id="@+id/player_art_card"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
@@ -61,25 +77,23 @@
                 android:scaleType="centerCrop" />
         </FrameLayout>
 
+        <!-- Title block: the track name carries the weight, the artist • album line is the
+             quiet second. Both take their colour from the theme, so they follow the page. -->
         <TextView
             android:id="@+id/player_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="26dp"
+            android:layout_marginTop="24dp"
             android:ellipsize="marquee"
             android:focusable="true"
             android:fontFamily="sans-serif"
             android:letterSpacing="-0.015"
             android:marqueeRepeatLimit="marquee_forever"
             android:maxLines="1"
-            android:shadowColor="#99000000"
-            android:shadowDx="0"
-            android:shadowDy="2"
-            android:shadowRadius="10"
             android:singleLine="true"
             android:text="Nothing playing"
-            android:textColor="#FFFFFFFF"
-            android:textSize="27sp"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="26sp"
             android:textStyle="bold" />
 
         <TextView
@@ -90,28 +104,86 @@
             android:ellipsize="end"
             android:fontFamily="sans-serif"
             android:maxLines="1"
-            android:shadowColor="#80000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="6"
-            android:textColor="#B8FFFFFF"
+            android:singleLine="true"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="15sp" />
 
-        <!-- Track + thumb colours are replaced with a LayerDrawable/ClipDrawable in Kotlin. -->
-        <SeekBar
-            android:id="@+id/player_seek"
+        <!-- Scrubber. The two 10-second skips live either side of it rather than in the
+             transport row, which keeps every row inside four controls (cycle mode's 72dp).
+             The preview pill floats above the bar while a drag is in progress; its x is
+             driven from the drag progress in PlayerPanel. -->
+        <FrameLayout
+            android:id="@+id/player_seek_host"
             android:layout_width="match_parent"
-            android:layout_height="32dp"
-            android:layout_marginTop="14dp"
-            android:max="0"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp"
-            android:progress="0"
-            android:splitTrack="false" />
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp">
 
-        <!-- elapsed (left) ... sleep timer (centre) ... total (right). The sleep control
-             lives in the time row so the wide modes row keeps its breathing room; it
-             shows the countdown ("⏱ 14:32") or "End of track" while armed. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/player_rewind"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="Rewind 10 seconds"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="⏪"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="22sp" />
+
+                <SeekBar
+                    android:id="@+id/player_seek"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:max="0"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:progress="0"
+                    android:splitTrack="false" />
+
+                <TextView
+                    android:id="@+id/player_forward"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:contentDescription="Forward 10 seconds"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="⏩"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="22sp" />
+            </LinearLayout>
+
+            <!-- Where the drag would land, in the accent colour on a solid pill so it reads
+                 over any artwork. Kept laid out at alpha 0 rather than GONE, so its width is
+                 known before the first frame of a drag; colour and background come from
+                 PlayerPanel. -->
+            <TextView
+                android:id="@+id/player_seek_preview"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_gravity="top|start"
+                android:alpha="0"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:importantForAccessibility="no"
+                android:minWidth="56dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="0:00"
+                android:textSize="13sp" />
+        </FrameLayout>
+
+        <!-- elapsed (left) ... total (right). The seek preview takes the middle while a
+             drag is in progress, which is why the row is there at all. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -126,22 +198,7 @@
                 android:gravity="start"
                 android:letterSpacing="0.06"
                 android:text="0:00"
-                android:textColor="#99FFFFFF"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/player_sleep"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:contentDescription="Sleep timer off, tap to set"
-                android:focusable="true"
-                android:gravity="center"
-                android:text="⏱"
-                android:textColor="#99FFFFFF"
+                android:textColor="?android:attr/textColorSecondary"
                 android:textSize="12sp" />
 
             <TextView
@@ -153,148 +210,132 @@
                 android:gravity="end"
                 android:letterSpacing="0.06"
                 android:text="0:00"
-                android:textColor="#99FFFFFF"
+                android:textColor="?android:attr/textColorSecondary"
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- Transport row. TextViews styled as buttons: no icon assets needed.
-             60–76 dp targets so it can be hit with a glove, one-handed. -->
+        <!-- Transport. The one filled control on the screen is play/pause, in the accent
+             with a ripple and a lifted disc; prev/next flank it. -->
         <LinearLayout
             android:id="@+id/player_transport"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="12dp"
             android:gravity="center"
             android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/player_prev"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:contentDescription="Previous track"
                 android:focusable="true"
                 android:gravity="center"
                 android:text="⏮"
-                android:textColor="#FFFFFFFF"
+                android:textColor="?android:attr/textColorPrimary"
                 android:textSize="24sp" />
 
-            <TextView
-                android:id="@+id/player_rewind"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:contentDescription="Rewind 10 seconds"
-                android:focusable="true"
-                android:gravity="center"
-                android:text="⏪"
-                android:textColor="#FFFFFFFF"
-                android:textSize="24sp" />
-
-            <!-- Filled circle with a dark glyph: the one high-contrast target on the screen. -->
             <TextView
                 android:id="@+id/player_play_pause"
                 android:layout_width="76dp"
                 android:layout_height="76dp"
-                android:layout_marginStart="14dp"
-                android:layout_marginEnd="14dp"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp"
                 android:clickable="true"
                 android:contentDescription="Play or pause"
                 android:focusable="true"
                 android:gravity="center"
                 android:text="▶"
-                android:textColor="#FF101014"
-                android:textSize="30sp" />
-
-            <TextView
-                android:id="@+id/player_forward"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:contentDescription="Forward 10 seconds"
-                android:focusable="true"
-                android:gravity="center"
-                android:text="⏩"
-                android:textColor="#FFFFFFFF"
-                android:textSize="24sp" />
+                android:textSize="28sp" />
 
             <TextView
                 android:id="@+id/player_next"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:contentDescription="Next track"
                 android:focusable="true"
                 android:gravity="center"
                 android:text="⏭"
-                android:textColor="#FFFFFFFF"
+                android:textColor="?android:attr/textColorPrimary"
                 android:textSize="24sp" />
         </LinearLayout>
 
-        <!-- Play modes. Shuffle is on/off; repeat cycles off -> all -> one. Each state has its
-             own pill + glyph + colour so it is readable at a glance (see PlayerPanel.renderModes). -->
+        <!-- Play modes, four to a row so cycle mode's 72dp targets still fit. Each pill is
+             keyed on its selected state, so "on" is visible at a glance; the star and the
+             sleep timer live here too, the timer showing its countdown while armed. -->
         <LinearLayout
             android:id="@+id/player_modes"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:gravity="center"
+            android:layout_marginTop="12dp"
             android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/player_shuffle"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="52dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:layout_weight="1"
                 android:clickable="true"
-                android:contentDescription="Shuffle off"
+                android:contentDescription="Shuffle off, tap to turn on"
                 android:focusable="true"
                 android:gravity="center"
-                android:minWidth="104dp"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
+                android:maxLines="1"
+                android:singleLine="true"
                 android:text="🔀"
-                android:textColor="#99FFFFFF"
-                android:textSize="20sp" />
+                android:textSize="18sp" />
 
             <TextView
                 android:id="@+id/player_repeat"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="52dp"
-                android:layout_marginStart="16dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
                 android:clickable="true"
-                android:contentDescription="Repeat off"
+                android:contentDescription="Repeat off, tap to repeat all"
                 android:focusable="true"
                 android:gravity="center"
-                android:minWidth="104dp"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
+                android:maxLines="1"
+                android:singleLine="true"
                 android:text="⇄"
-                android:textColor="#99FFFFFF"
-                android:textSize="20sp" />
+                android:textSize="18sp" />
 
-            <!-- Favourite star for the current track. Wrap width (a small glyph), so the
-                 row's two 104dp pills plus this still fit a 360dp screen. -->
             <TextView
                 android:id="@+id/player_star"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="52dp"
-                android:layout_marginStart="16dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
                 android:clickable="true"
                 android:contentDescription="Not a favourite"
                 android:focusable="true"
                 android:gravity="center"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
+                android:maxLines="1"
+                android:singleLine="true"
                 android:text="☆"
-                android:textColor="#99FFFFFF"
-                android:textSize="20sp" />
+                android:textSize="18sp" />
+
+            <!-- The countdown ("⏱ 14:32") lives in this pill; end-of-track mode reads
+                 "⏱ End of track" and ellipsises on a narrow screen, which is why every mode
+                 label keeps its content description as the authoritative wording. -->
+            <TextView
+                android:id="@+id/player_sleep"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:clickable="true"
+                android:contentDescription="Sleep timer off, tap to set"
+                android:ellipsize="end"
+                android:focusable="true"
+                android:gravity="center"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="⏱"
+                android:textSize="13sp" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>
