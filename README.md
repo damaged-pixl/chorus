@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.6 MB** (1,624,203 bytes — R8 full mode, English-only locales,
+**Release APK: ~1.6 MB** (1,633,863 bytes — R8 full mode, English-only locales,
 resource shrinking). No Compose, no Material, no DI
 framework, no analytics, no crash reporting, no ads, **no INTERNET permission** — the
 app cannot phone home even if it wanted to.
@@ -60,9 +60,45 @@ goes through the shared MediaController so the lock screen sees the same queue.
 
 Empty screens say so in one friendly line (search, queue, playlists).
 
-**Cycle mode** (Setup tab) — for use on a bike. Switches to a bright high-contrast
-theme for direct sunlight and enlarges every touch target to 72dp for gloved hands.
-Persisted in SharedPreferences.
+**Cycle mode** (Setup tab, *or* the sun control in the full-screen player) — for use on
+a bike. Switches to a bright high-contrast theme for direct sunlight and enlarges every
+touch target to 72dp for gloved hands. Persisted in SharedPreferences.
+
+## Theming
+
+**Light/dark is the system UI mode.** There is no in-app toggle and no setting — the app
+follows the phone. `Theme.Chorus` is `Theme.AppCompat.DayNight.NoActionBar`, so switching
+the phone between light and dark recreates the activities and every screen re-themes.
+Cycle mode is the one manual override, and it is deliberate: it is high-contrast plus
+big touch targets for sunlight and gloves, not a light/dark preference.
+
+Colours are **design tokens**, not literals:
+
+- `res/values/attrs.xml` declares the token names as theme attributes.
+- `res/values/colors.xml` holds all three palettes (`chorus_light_*`, `chorus_dark_*`,
+  `chorus_cycle_*`).
+- `res/values/themes.xml` maps `Theme.Chorus.Base` → the light palette and
+  `Theme.Chorus.Cycle` → the light palette plus the cycle overrides.
+  `res/values-night/themes.xml` redefines `Theme.Chorus.Base` → the dark palette.
+
+Layouts reference `?attr/chorusXxx`; Kotlin resolves them through `ui/Theming.kt`. **Do
+not reference a themed colour as `@color/…` from a layout**: a `@color` resolves by
+resource *configuration*, not by theme, so it would hand back the night value while
+`Theme.Chorus.Cycle` is active and paint the bright theme dark. That is why the two
+palettes have distinct names and there is no `values-night/colors.xml`.
+
+Two things that look wrong but are not:
+
+- **System-bar icon colour is set in code**, not in the theme. At `targetSdk 35+` the
+  platform forces edge-to-edge and ignores `android:statusBarColor` /
+  `android:windowLightStatusBar` outright. `Theming.applySystemBars` measures the themed
+  background's luminance and sets the icons through the insets controller;
+  `CycleMode.applyTheme` calls it for both activities.
+- **The full-screen player is no longer pinned dark.** It follows the same DayNight
+  theme as the rest of the app. In the light (and cycle) themes the artwork square sits
+  on its own near-black card (`chorusPlayerArtCard`) and the legibility scrim ramps to
+  near-white instead of near-black, so a pale sleeve still reads on a pale page. In the
+  dark theme the card token is transparent and the player looks exactly as it did before.
 
 ## Layout
 
@@ -71,7 +107,8 @@ data/      Track/Album models, LibraryReader (MediaStore), PlaylistStore (SQLite
            playlists, favourites, play_stats), Favourites (app-wide liked set), Settings
 playback/  PlaybackService (MediaSessionService + play counting), PlayerHolder (single
            shared controller), SleepTimer
-ui/        Art loader, adapters, PlayerPanel, MiniPlayer, Search/Queue/Playlist panels, CycleMode
+ui/        Art loader, adapters, PlayerPanel, MiniPlayer, Search/Queue/Playlist panels,
+           CycleMode, Theming (design-token + system-bar resolution)
 MainActivity, PlayerActivity
 ```
 
@@ -93,6 +130,8 @@ mini player and the full player can never drift apart.
   bitmaps to a list.
 - **`targetSdk 36` forces edge-to-edge on Android 15+.** Both activities install an
   `OnApplyWindowInsetsListener`; without it the tab strip renders under the status bar.
+  Neither activity declares `android:configChanges`, so a `uiMode` change recreates them
+  and the DayNight theme re-resolves — keep it that way.
 - **`MediaStore.Audio.Media.YEAR` is frequently 0.** Subtitles omit it when `<= 0` and
   never emit dangling `•` separators.
 - The player runs a ~500ms tick **only while playing and attached** (Media3 has no
@@ -100,6 +139,4 @@ mini player and the full player can never drift apart.
 
 ## Not done
 
-- Cycle mode's light theme does not reach the full-screen `PlayerActivity` (it stays
-  dark by design so the artwork backdrop reads).
 - No gapless/crossfade or playback speed.

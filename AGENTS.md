@@ -19,11 +19,28 @@ overview; this file is the quick reference for agents working here.
 - **Never put full-size bitmaps in lists.** `Art` has one shared 2-thread pool, an
   LruCache (heap/8), size-based subsampling, and a negative cache for artless albums.
   Keep list binds on the bounded path.
-- **Check the *release* APK size after changes** (`~1.6 MB` / 1,624,203 bytes is the
-  baseline as of 2026-10-18, up from 1,614,627 for the six new features; earlier
-  1,849,450 via `localeFilters += "en"` + META-INF licence excludes). Debug builds
-  are ~8.7 MB and meaningless for size. A dependency or asset regression shows up
-  here first — this is the primary guard against feature creep into the thin stack.
+- **Check the *release* APK size after changes** (`~1.6 MB` / 1,633,863 bytes is the
+  baseline as of 2026-10-18, after the DayNight/token work; 1,624,203 before it, itself
+  up from 1,614,627 for the six new features; earlier 1,849,450 via `localeFilters += "en"`
+  + META-INF licence excludes). Debug builds are ~8.7 MB and meaningless for size. A
+  dependency or asset regression shows up here first — this is the primary guard against
+  feature creep into the thin stack.
+- **Never reference a themed colour as `@color/…` from a layout or a theme.** Colours are
+  design tokens: declared as theme attributes in `res/values/attrs.xml`, with the light,
+  dark and cycle palettes all in `res/values/colors.xml` (`chorus_light_*` /
+  `chorus_dark_*` / `chorus_cycle_*`). Layouts use `?attr/chorusXxx`; Kotlin uses
+  `Theming.color(ctx, R.attr.chorusXxx)`. A `@color` resolves by *configuration*, not by
+  theme, so it would return the dark value while `Theme.Chorus.Cycle` is active and paint
+  the bright theme dark. This is also why there is deliberately **no
+  `res/values-night/colors.xml`** — the day/night switch happens in
+  `res/values-night/themes.xml`, which redefines `Theme.Chorus.Base` against the dark
+  palette. Don't "tidy" the palettes back into one name under two qualifiers.
+- **There is no light/dark setting and there must never be one.** `Theme.Chorus` is
+  `Theme.AppCompat.DayNight.NoActionBar`; the phone's UI mode drives everything, and a
+  `uiMode` change arrives as a plain Activity recreation. Never add
+  `android:configChanges="uiMode"` to either activity — that would block the recreation
+  and leave the app on the stale palette. Cycle mode is the one manual override, and it
+  is high-contrast + 72dp targets, not a light/dark preference.
 
 ## Stack
 
@@ -55,13 +72,20 @@ No test suite — verify by building and running on device.
 - `playback/` — `PlaybackService.kt` (MediaSessionService; counts plays on media-item
   transitions), `PlayerHolder.kt`, `SleepTimer.kt` (in-memory countdown / end-of-track).
 - `ui/` — `Art.kt`, adapters, `PlayerPanel.kt`/`MiniPlayer.kt`, Search/Queue/Playlist
-  panels, `CycleMode.kt`/`CycleToggle.kt`.
+  panels, `CycleMode.kt`/`CycleToggle.kt`, `Theming.kt` (the only place a token is read
+  out of a theme, plus the system-bar icon contrast).
 - `MainActivity.kt` (tabs + mini player; track tab = `track_screen` sort bar + list),
   `PlayerActivity.kt` (full-screen player).
 
 **`PlayerHolder` owns the only `MediaController`** — every screen is a view over it, so
 mini and full player can't drift. Never create a second controller. Its `player`
 property is a read-only view for observers (SleepTimer); mutations go via `whenReady`.
+
+**Both activities call `CycleMode.applyTheme(this, cycle)` before `super.onCreate()`** —
+`setTheme` has to happen before anything inflates, and toggling needs `recreate()`. Both
+also run `CycleMode.apply` on `android.R.id.content` in a `post {}` so the 72dp targets
+land once the rows exist. `PlayerActivity` registers a `Settings` listener for this and
+**removes it in `onDestroy`** — see the strong-listener note below.
 
 ## Gotchas (hard-won, don't regress)
 
@@ -71,8 +95,15 @@ property is a read-only view for observers (SleepTimer); mutations go via `whenR
   never emit dangling `•` separators.
 - The seek bar is driven by a ~500 ms tick that runs **only while playing and attached**
   (Media3 has no position callback) and self-cancels. Don't make it unconditional.
-- `Settings` listeners are held strongly — remove any listener capturing an Activity in
-  `onDestroy`, or `recreate()` leaks it.
+- **System-bar icon colour cannot be a theme attribute.** At `targetSdk 35+` the platform
+  forces edge-to-edge and ignores `android:statusBarColor` /
+  `android:windowLightStatusBar` outright, so dark-on-light only ever works through
+  `Theming.applySystemBars(activity)`. `CycleMode.applyTheme` calls it for both
+  activities, so the icons follow whichever palette is active. Don't move it back into a
+  theme item.
+- **`Settings` listeners are held strongly** — remove any listener capturing an Activity in
+  `onDestroy`, or `recreate()` leaks it. `PlayerActivity` now has one: it watches for a
+  cycle-mode change made on the Setup tab while the player is behind it, and recreates.
 - Playlist DB is **v3 with real migrations** (v1→v2 added `favourites`, v2→v3 added
   `play_stats`; a v1 install falls through both branches). Any schema change needs a
   version bump AND a matching `onUpgrade` branch. `Favourites`, `MainActivity` and
@@ -114,7 +145,5 @@ property is a read-only view for observers (SleepTimer); mutations go via `whenR
 
 ## Known gaps (backlog, not bugs)
 
-- Cycle mode's light theme doesn't reach `PlayerActivity` (stays dark by design so the
-  artwork backdrop reads).
 - No gapless/crossfade or playback speed. The sleep timer does not survive process
   death (by design).
