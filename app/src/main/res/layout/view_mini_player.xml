@@ -1,47 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Compact single-row mini player: small art, title, play/pause. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Compact single-row mini player: small art, title, play/pause, plus a 2dp
+     playback-progress hairline drawn along the top edge (width driven by scaleX
+     from MiniPlayer's own playing-and-attached 500 ms tick — same discipline as
+     the full player's seek bar; Media3 has no position callback). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="64dp"
     android:background="?android:attr/colorBackground"
-    android:elevation="6dp"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:paddingStart="8dp"
-    android:paddingEnd="8dp">
+    android:elevation="6dp">
 
-    <ImageView
-        android:id="@+id/mini_art"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:scaleType="centerCrop"
-        android:contentDescription="Album art" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
 
-    <TextView
-        android:id="@+id/mini_title"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="8dp"
-        android:layout_weight="1"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:singleLine="true"
-        android:text="Nothing playing"
-        android:textColor="?android:attr/textColorPrimary"
-        android:textSize="15sp" />
+        <ImageView
+            android:id="@+id/mini_art"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:scaleType="centerCrop"
+            android:contentDescription="Album art" />
 
-    <TextView
-        android:id="@+id/mini_play_pause"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:clickable="true"
-        android:contentDescription="Play or pause"
-        android:focusable="true"
-        android:gravity="center"
-        android:text="▶"
-        android:textColor="?android:attr/textColorPrimary"
-        android:textSize="20sp" />
+        <TextView
+            android:id="@+id/mini_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text="Nothing playing"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="15sp" />
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/mini_play_pause"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:contentDescription="Play or pause"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="▶"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="20sp" />
+    </LinearLayout>
+
+    <!-- Same amber as the full player's seek fill, so both players read as one system.
+         pivotX=0 makes scaleX grow the bar left-to-right; hidden at 0 when idle. -->
+    <View
+        android:id="@+id/mini_progress"
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:layout_gravity="top"
+        android:background="#FFFFC107"
+        android:importantForAccessibility="no"
+        android:pivotX="0"
+        android:scaleX="0" />
+</FrameLayout>

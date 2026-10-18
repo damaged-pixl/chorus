@@ -1,12 +1,15 @@
 package com.bee.chorus.ui
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.bee.chorus.R
 import com.bee.chorus.playback.PlayerHolder
@@ -17,6 +20,10 @@ import com.bee.chorus.playback.PlayerHolder
  *
  * Auto-hides when the queue is empty. If the host wants to control visibility explicitly,
  * [setVisible] pins it and automatic hiding stops applying.
+ *
+ * The top-edge progress hairline follows the same tick discipline as the full player's
+ * seek bar (Media3 has no position callback): one ~500 ms main-thread tick that runs only
+ * while audio is playing *and* this view is attached, and cancels itself otherwise.
  */
 class MiniPlayer @JvmOverloads constructor(
     ctx: Context,
@@ -26,10 +33,15 @@ class MiniPlayer @JvmOverloads constructor(
     private val artView: ImageView
     private val titleView: TextView
     private val playPauseButton: TextView
+    private val progressView: View
 
     private var attached = false
     private var lastArtKey: String? = null
     private var visibilityOverride: Boolean? = null
+    private var lastPlayer: Player? = null
+    private var tickScheduled = false
+
+    private val handler = Handler(Looper.getMainLooper())
 
     // Same instance is removed later — PlayerHolder removes listeners by identity.
     private val playerListener: (Player) -> Unit = { player -> render(player) }
@@ -40,6 +52,7 @@ class MiniPlayer @JvmOverloads constructor(
         artView = findViewById(R.id.mini_art)
         titleView = findViewById(R.id.mini_title)
         playPauseButton = findViewById(R.id.mini_play_pause)
+        progressView = findViewById(R.id.mini_progress)
 
         playPauseButton.setOnClickListener {
             PlayerHolder.whenReady { player ->
@@ -57,6 +70,7 @@ class MiniPlayer @JvmOverloads constructor(
         if (attached) return
         attached = true
         PlayerHolder.addPlayerListener(playerListener)
+        if (lastPlayer?.isPlaying == true) scheduleTick()
     }
 
     /** Stop observing. Safe to call when not attached. */
@@ -65,6 +79,7 @@ class MiniPlayer @JvmOverloads constructor(
             attached = false
             PlayerHolder.removePlayerListener(playerListener)
         }
+        stopTick()
     }
 
     /**
@@ -89,6 +104,8 @@ class MiniPlayer @JvmOverloads constructor(
     // ---------------------------------------------------------------- render
 
     private fun render(player: Player) {
+        lastPlayer = player
+
         val metadata = player.currentMediaItem?.mediaMetadata
 
         val title = metadata?.title?.toString().orEmpty()
@@ -112,10 +129,52 @@ class MiniPlayer @JvmOverloads constructor(
         playPauseButton.isEnabled = hasQueue
         playPauseButton.alpha = if (hasQueue) 1f else DISABLED_ALPHA
 
+        renderProgress(player)
+
         // Auto-visibility only applies while the host has not pinned us with setVisible().
         if (visibilityOverride == null) {
             visibility = if (hasQueue) View.VISIBLE else View.GONE
         }
+
+        // Keep the hairline advancing while audio actually is; it stops itself otherwise.
+        if (player.isPlaying) scheduleTick() else stopTick()
+    }
+
+    /** Width fraction of the top hairline: current position over duration, clamped. */
+    private fun renderProgress(player: Player) {
+        val duration = player.duration
+        val fraction = if (duration != C.TIME_UNSET && duration > 0L) {
+            (player.currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+        progressView.scaleX = fraction
+    }
+
+    // ---------------------------------------------------------------- ticker
+
+    /**
+     * Mirror of [PlayerPanel]'s tick: one short main-thread runnable, only while playing
+     * and attached, self-cancelling on pause or detach. No work when idle.
+     */
+    private val tick = object : Runnable {
+        override fun run() {
+            tickScheduled = false
+            val player = lastPlayer ?: return
+            renderProgress(player)
+            if (player.isPlaying && isAttachedToWindow) scheduleTick()
+        }
+    }
+
+    private fun scheduleTick() {
+        if (tickScheduled) return
+        tickScheduled = true
+        handler.postDelayed(tick, TICK_MS)
+    }
+
+    private fun stopTick() {
+        handler.removeCallbacks(tick)
+        tickScheduled = false
     }
 
     private companion object {
@@ -124,5 +183,6 @@ class MiniPlayer @JvmOverloads constructor(
         const val GLYPH_PLAY = "▶"
         const val GLYPH_PAUSE = "⏸"
         const val NOTHING_PLAYING = "Nothing playing"
+        const val TICK_MS = 500L
     }
 }
