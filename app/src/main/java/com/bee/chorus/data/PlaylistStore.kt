@@ -9,13 +9,14 @@ import android.database.sqlite.SQLiteOpenHelper
  * Local playlists. Plain SQLite (no Room) to keep the build and runtime light.
  * Tracks are referenced by their stable MediaStore id, so nothing is copied.
  *
- * Also holds the favourites set (`favourites` table, added in schema v2). Note that
- * several instances of this helper may exist at once (MainActivity owns one, the
- * [Favourites] facade and PlaybackService each open their own with the application
- * context) — Android's SQLiteDatabase pools connections per file path, so that is safe.
+ * Also holds the app's small writable state (`favourites` from schema v2 and
+ * `play_stats` from v3). Note that several instances of this helper may exist at
+ * once (MainActivity owns one, the [Favourites] facade and PlaybackService each open
+ * their own with the application context) — Android's SQLiteDatabase pools connections
+ * per file path, so that is safe.
  */
 class PlaylistStore(context: Context) :
-    SQLiteOpenHelper(context, Library.PLAYLIST_DB, null, 2) {
+    SQLiteOpenHelper(context, Library.PLAYLIST_DB, null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -33,14 +34,31 @@ class PlaylistStore(context: Context) :
         )
         db.execSQL("CREATE INDEX idx_ptracks_pid ON playlist_tracks(playlist_id, position)")
         db.execSQL("CREATE TABLE favourites(track_id INTEGER PRIMARY KEY)")
+        db.execSQL(
+            """CREATE TABLE play_stats(
+                track_id INTEGER PRIMARY KEY,
+                plays INTEGER NOT NULL,
+                last_played INTEGER NOT NULL)"""
+        )
     }
 
     /**
      * Real migrations, one per schema bump:
      *  v1 -> v2 added the `favourites` table.
+     *  v2 -> v3 added the `play_stats` table.
+     * An oldVersion of 1 falls through both branches, so every historical version
+     * reaches the current schema.
      */
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
         if (old < 2) db.execSQL("CREATE TABLE IF NOT EXISTS favourites(track_id INTEGER PRIMARY KEY)")
+        if (old < 3) {
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS play_stats(
+                    track_id INTEGER PRIMARY KEY,
+                    plays INTEGER NOT NULL,
+                    last_played INTEGER NOT NULL)"""
+            )
+        }
     }
 
     fun createPlaylist(name: String): Long {
@@ -148,4 +166,53 @@ class PlaylistStore(context: Context) :
             writableDatabase.delete("favourites", "track_id=?", arrayOf(trackId.toString()))
         }
     }
+
+    // ---------------------------------------------------------------- play statistics
+
+    /**
+     * One play of [trackId] at time [atMs]: bump the counter and stamp last_played,
+     * creating the row on first play. Written as UPDATE-then-INSERT rather than an
+     * ON CONFLICT upsert because upsert needs SQLite 3.24 (API 30) and minSdk is 26.
+     * Callers own the threading — PlaybackService does this on its own worker.
+     */
+    fun recordPlay(trackId: Long, atMs: Long = System.currentTimeMillis()) {
+        val db = writableDatabase
+        val update = db.compileStatement(
+            "UPDATE play_stats SET plays = plays + 1, last_played = ? WHERE track_id = ?"
+        )
+        update.use {
+            it.bindLong(1, atMs)
+            it.bindLong(2, trackId)
+            if (it.executeUpdateDelete() == 0) {
+                val cv = ContentValues().apply {
+                    put("track_id", trackId)
+                    put("plays", 1)
+                    put("last_played", atMs)
+                }
+                db.insertWithOnConflict(
+                    "play_stats", null, cv, SQLiteDatabase.CONFLICT_IGNORE
+                )
+            }
+        }
+    }
+
+    /** Play counts and last-played stamps, keyed by MediaStore track id. */
+    fun playStats(): Map<Long, PlayStat> {
+        val out = HashMap<Long, PlayStat>()
+        readableDatabase.query(
+            "play_stats", arrayOf("track_id", "plays", "last_played"),
+            null, null, null, null, null
+        ).use { c ->
+            val idC = c.getColumnIndexOrThrow("track_id")
+            val playsC = c.getColumnIndexOrThrow("plays")
+            val lastC = c.getColumnIndexOrThrow("last_played")
+            while (c.moveToNext()) {
+                out[c.getLong(idC)] = PlayStat(c.getInt(playsC), c.getLong(lastC))
+            }
+        }
+        return out
+    }
+
+    /** One track's play statistics. */
+    data class PlayStat(val plays: Int, val lastPlayed: Long)
 }

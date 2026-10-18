@@ -2,9 +2,14 @@ package com.bee.chorus.playback
 
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.bee.chorus.data.PlaylistStore
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
 
 /**
  * Background playback host. MediaSessionService gives us, for free:
@@ -16,6 +21,12 @@ import androidx.media3.session.MediaSessionService
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
+
+    /** Play-stat writes: one daemon thread, so a transition never blocks the playback looper. */
+    private val statsIo = Executors.newSingleThreadExecutor(DaemonThreadFactory)
+
+    /** Own store instance over the app context; the service outlives any Activity. */
+    private val statsStore by lazy { PlaylistStore(applicationContext) }
 
     override fun onCreate() {
         super.onCreate()
@@ -30,6 +41,16 @@ class PlaybackService : MediaSessionService() {
             )
             .setHandleAudioBecomingNoisy(true)   // pause when headphones unplug
             .build()
+
+        // Play counts. onMediaItemTransition fires only when the *current item* changes —
+        // pausing/resuming and seeking within a track never trigger it — so every reason
+        // (auto-advance, user skip, new queue) counts as one genuine play of the new track.
+        player.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val id = mediaItem?.mediaId?.toLongOrNull() ?: return
+                statsIo.execute { statsStore.recordPlay(id) }
+            }
+        })
 
         mediaSession = MediaSession.Builder(this, player).build()
     }
@@ -46,11 +67,17 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        statsIo.shutdown()
         mediaSession?.run {
             player.release()
             release()
         }
         mediaSession = null
         super.onDestroy()
+    }
+
+    private object DaemonThreadFactory : ThreadFactory {
+        override fun newThread(r: Runnable): Thread =
+            Thread(r, "chorus-stats").apply { isDaemon = true }
     }
 }

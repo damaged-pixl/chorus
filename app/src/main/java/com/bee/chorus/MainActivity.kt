@@ -9,6 +9,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -53,6 +54,13 @@ class MainActivity : AppCompatActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private var cycle = false
 
+    // Track-list sort. TITLE is the MediaStore scan order (title, case-insensitive);
+    // the other two order by the play_stats table, unplayed tracks last.
+    private var sortMode = SORT_TITLE
+    private lateinit var sortButtons: List<TextView>
+    private var sortIdleColor = 0
+    private val sortActiveColor = 0xFFFFC107.toInt()
+
     // One RecycledViewPool shared by the three main lists, so row views survive tab
     // switches instead of being torn down per list. Safe to share because each adapter
     // reports its own view type (see getItemViewType in Track/Album/PlaylistAdapter) —
@@ -82,6 +90,7 @@ class MainActivity : AppCompatActivity() {
         PlayerHolder.bind(this)
 
         wireLists()
+        wireSortBar()
         wireTabs()
         wireCycle()
 
@@ -134,7 +143,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 library = tracks
                 this.albums = albums
-                trackAdapter.submit(tracks)
+                applySort()
                 albumAdapter.submit(albums)
                 searchPanel.setTracks(tracks)
                 playlistPanel.setLibrary(tracks)
@@ -150,6 +159,72 @@ class MainActivity : AppCompatActivity() {
             val res = list.get()
             runOnUiThread { playlistAdapter.submit(res) }
         }
+    }
+
+    // ---------- track-list sorting ----------
+
+    private fun wireSortBar() {
+        val ta = obtainStyledAttributes(intArrayOf(android.R.attr.textColorSecondary))
+        sortIdleColor = ta.getColor(0, 0x99FFFFFF.toInt())
+        ta.recycle()
+
+        sortButtons = listOf(
+            findViewById(R.id.sort_title),
+            findViewById(R.id.sort_plays),
+            findViewById(R.id.sort_recent)
+        )
+        sortButtons[SORT_TITLE].setOnClickListener { setSort(SORT_TITLE) }
+        sortButtons[SORT_PLAYS].setOnClickListener { setSort(SORT_PLAYS) }
+        sortButtons[SORT_RECENT].setOnClickListener { setSort(SORT_RECENT) }
+        updateSortBar()
+    }
+
+    private fun setSort(mode: Int) {
+        if (mode == sortMode) return
+        sortMode = mode
+        applySort()
+    }
+
+    /** Highlight the active sort; the other two stay at the muted secondary tint. */
+    private fun updateSortBar() {
+        for (i in sortButtons.indices) {
+            sortButtons[i].setTextColor(if (i == sortMode) sortActiveColor else sortIdleColor)
+        }
+    }
+
+    /**
+     * Submit the track list in the current sort order and refresh the highlight.
+     * The stats-backed sorts re-read play_stats, so this is also the refresh path
+     * for plays counted in the background (see onResume).
+     */
+    private fun applySort() {
+        updateSortBar()
+        when (sortMode) {
+            // MediaStore scans in title order already; no work needed.
+            SORT_TITLE -> trackAdapter.submit(library)
+            else -> io.execute {
+                val stats = store.playStats()
+                // Unplayed tracks (0 / never) sort last; ties break A–Z for a stable list.
+                val sorted = when (sortMode) {
+                    SORT_PLAYS -> library.sortedWith(
+                        compareByDescending<Track> { stats[it.id]?.plays ?: 0 }
+                            .thenBy { it.title.lowercase() }
+                    )
+                    else -> library.sortedWith(
+                        compareByDescending<Track> { stats[it.id]?.lastPlayed ?: 0L }
+                            .thenBy { it.title.lowercase() }
+                    )
+                }
+                runOnUiThread { trackAdapter.submit(sorted) }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Plays counted while another screen (or the notification) was in front can
+        // change the stats-backed orders; re-sort so returning to the list is current.
+        if (sortMode != SORT_TITLE) applySort()
     }
 
     // ---------- wiring ----------
@@ -379,7 +454,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun wireTabs() {
         val map = mapOf(
-            R.id.tab_tracks to R.id.track_list,
+            // track_screen (sort bar + list) is shown as one unit, so the screen id —
+            // not the bare RecyclerView — is what the tab strip switches between.
+            R.id.tab_tracks to R.id.track_screen,
             R.id.tab_albums to R.id.album_list,
             R.id.tab_playlists to R.id.playlist_home,
             R.id.tab_search to R.id.search_panel,
@@ -399,7 +476,7 @@ class MainActivity : AppCompatActivity() {
     /** Show one content view, hide the rest of the top-level panels. */
     private fun show(target: Int) {
         val panels = listOf(
-            R.id.track_list, R.id.album_list, R.id.playlist_home, R.id.playlist_panel,
+            R.id.track_screen, R.id.album_list, R.id.playlist_home, R.id.playlist_panel,
             R.id.search_panel, R.id.queue_panel, R.id.settings_panel
         )
         for (id in panels) {
@@ -417,5 +494,12 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         io.shutdown()
+    }
+
+    private companion object {
+        /** Sort modes for the track list; index into [sortButtons]. */
+        const val SORT_TITLE = 0
+        const val SORT_PLAYS = 1
+        const val SORT_RECENT = 2
     }
 }
