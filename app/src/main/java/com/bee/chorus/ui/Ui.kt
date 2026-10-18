@@ -45,9 +45,6 @@ internal object Ui {
     fun dp(ctx: Context, value: Float): Float =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, ctx.resources.displayMetrics)
 
-    /** dp -> px as a whole number, for sizes the framework wants as ints. */
-    fun dpInt(ctx: Context, value: Int): Int = dp(ctx, value.toFloat()).toInt()
-
     /**
      * The app's accent, for *fills* — the selected tab's pill, its underline, the
      * now-playing row. Read from `colorAccent`, which the app theme points at the accent
@@ -183,3 +180,4 @@ internal object Ui {
      */
     private const val FALLBACK_ACCENT = 0xFFFFC107.toInt()
 }
+
