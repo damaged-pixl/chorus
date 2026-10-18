@@ -1,16 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Light theme + the Cycle override.
+
+  Theme.Chorus.Base holds the token mapping so the DayNight theme and the Cycle theme can
+  share one shape. values-night/themes.xml redefines Base against the dark palette, which
+  is how a system UI-mode change re-themes the app: the platform picks the -night resource
+  set, the Activity is recreated, and the new Base is applied.
+
+  Every @color reference in this file is from the LIGHT palette (chorus_light_* / the
+  chorus_cycle_* overrides) on purpose — see values/colors.xml. It is what keeps
+  Theme.Chorus.Cycle bright when the phone itself is set to night. The dark mapping lives
+  in values-night/themes.xml, which redefines Theme.Chorus.Base and nothing else.
+-->
 <resources>
-    <!-- Framework/appcompat theme, no Material dependency. -->
-    <style name="Theme.Chorus" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
-        <item name="android:statusBarColor">@android:color/black</item>
+    <!-- Framework/appcompat DayNight theme, no Material dependency. -->
+    <style name="Theme.Chorus.Base" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:colorBackground">@color/chorus_light_bg</item>
+        <item name="android:windowBackground">@color/chorus_light_bg</item>
+        <item name="android:statusBarColor">@color/chorus_light_status_bar</item>
+        <item name="android:navigationBarColor">@color/chorus_light_nav_bar</item>
+
+        <!-- Framework text attributes the layouts already read via ?android:attr/... -->
+        <item name="android:textColorPrimary">@color/chorus_light_text_primary</item>
+        <item name="android:textColorSecondary">@color/chorus_light_text_secondary</item>
+
+        <item name="chorusBg">@color/chorus_light_bg</item>
+        <item name="chorusSurface">@color/chorus_light_surface</item>
+        <item name="chorusSurfaceElevated">@color/chorus_light_surface_elevated</item>
+        <item name="chorusTextPrimary">@color/chorus_light_text_primary</item>
+        <item name="chorusTextSecondary">@color/chorus_light_text_secondary</item>
+        <item name="chorusTextMuted">@color/chorus_light_text_muted</item>
+        <item name="chorusDivider">@color/chorus_light_divider</item>
+        <item name="chorusAccent">@color/chorus_light_accent</item>
+        <item name="chorusAccentText">@color/chorus_light_accent_text</item>
+        <item name="chorusStatusBar">@color/chorus_light_status_bar</item>
+        <item name="chorusNavBar">@color/chorus_light_nav_bar</item>
+
+        <item name="chorusPlayerBg">@color/chorus_light_player_bg</item>
+        <item name="chorusPlayerText">@color/chorus_light_player_text</item>
+        <item name="chorusPlayerTextSecondary">@color/chorus_light_player_text_secondary</item>
+        <item name="chorusPlayerTextMuted">@color/chorus_light_player_text_muted</item>
+        <item name="chorusPlayerTextShadow">@color/chorus_light_player_text_shadow</item>
+        <item name="chorusPlayerArtCard">@color/chorus_light_player_art_card</item>
+        <item name="chorusPlayerScrimMid">@color/chorus_light_player_scrim_mid</item>
+        <item name="chorusPlayerScrimLow">@color/chorus_light_player_scrim_low</item>
+        <item name="chorusPlayerScrimEnd">@color/chorus_light_player_scrim_end</item>
+        <item name="chorusPlayerSurface">@color/chorus_light_player_surface</item>
+        <item name="chorusPlayerOnSurface">@color/chorus_light_player_on_surface</item>
+        <item name="chorusPlayerPill">@color/chorus_light_player_pill</item>
+        <item name="chorusPlayerPillBorder">@color/chorus_light_player_pill_border</item>
+        <item name="chorusPlayerPillOn">@color/chorus_light_player_pill_on</item>
+        <item name="chorusPlayerOnPillText">@color/chorus_light_player_on_pill_text</item>
+        <item name="chorusPlayerPillStrong">@color/chorus_light_player_pill_strong</item>
+        <item name="chorusPlayerOnStrongPillText">@color/chorus_light_player_on_strong_pill_text</item>
+        <item name="chorusPlayerRipple">@color/chorus_light_player_ripple</item>
+        <item name="chorusPlayerSeekTrack">@color/chorus_light_player_seek_track</item>
+        <item name="chorusPlayerSeekThumb">@color/chorus_light_player_seek_thumb</item>
+        <item name="chorusPlayerSeekHalo">@color/chorus_light_player_seek_halo</item>
+
+        <!-- Widget tints: the amber accent drives Buttons, the search field cursor and
+             the cycle-mode Switch. -->
+        <item name="colorAccent">@color/chorus_light_accent</item>
+        <item name="colorControlActivated">@color/chorus_light_accent</item>
+        <item name="colorControlNormal">@color/chorus_light_text_secondary</item>
     </style>
 
-    <!-- Cycle mode: high-contrast light theme for direct sunlight readability.
-         Selected at runtime by MainActivity via setTheme(). -->
-    <style name="Theme.Chorus.Cycle" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
-        <item name="android:statusBarColor">@android:color/white</item>
-        <item name="android:textColorPrimary">@android:color/black</item>
+    <!-- Light/dark is the system UI mode, not a setting: a uiMode change picks up the
+         values-night definition of Base and the Activity is recreated under it. -->
+    <style name="Theme.Chorus" parent="Theme.Chorus.Base" />
+
+    <!--
+      Cycle mode: high-contrast bright theme for direct sunlight, plus 72dp touch targets
+      (see ui/CycleMode.kt). It is NOT a light/dark preference — it is a manual override —
+      so it deliberately inherits the *light* Base rather than the DayNight one, and pushes
+      every ink colour to pure black on pure white.
+    -->
+    <style name="Theme.Chorus.Cycle" parent="Theme.Chorus.Base">
+        <item name="android:colorBackground">@color/chorus_cycle_bg</item>
+        <item name="android:windowBackground">@color/chorus_cycle_bg</item>
+        <item name="android:statusBarColor">@color/chorus_cycle_bg</item>
+        <item name="android:navigationBarColor">@color/chorus_cycle_bg</item>
+
+        <item name="android:textColorPrimary">@color/chorus_cycle_text</item>
+        <item name="android:textColorSecondary">@color/chorus_cycle_text</item>
+
+        <item name="chorusBg">@color/chorus_cycle_bg</item>
+        <item name="chorusSurface">@color/chorus_cycle_bg</item>
+        <item name="chorusSurfaceElevated">@color/chorus_cycle_bg</item>
+        <item name="chorusTextPrimary">@color/chorus_cycle_text</item>
+        <item name="chorusTextSecondary">@color/chorus_cycle_text_secondary</item>
+        <item name="chorusTextMuted">@color/chorus_cycle_text_muted</item>
+        <item name="chorusDivider">@color/chorus_cycle_divider</item>
+        <!-- Amber-on-amber is unreadable in sun; "on" states go solid black instead. -->
+        <item name="chorusAccentText">@color/chorus_cycle_text</item>
+        <item name="chorusStatusBar">@color/chorus_cycle_bg</item>
+        <item name="chorusNavBar">@color/chorus_cycle_bg</item>
+        <item name="colorControlNormal">@color/chorus_cycle_text</item>
+
+        <!-- Player: still bright, but the artwork square keeps its dark card so a pale
+             sleeve reads, and the play/mode controls invert to black-on-white. -->
+        <item name="chorusPlayerBg">@color/chorus_cycle_bg</item>
+        <item name="chorusPlayerText">@color/chorus_cycle_text</item>
+        <item name="chorusPlayerTextSecondary">@color/chorus_cycle_text_secondary</item>
+        <item name="chorusPlayerTextMuted">@color/chorus_cycle_text</item>
+        <item name="chorusPlayerSurface">@color/chorus_cycle_text</item>
+        <item name="chorusPlayerOnSurface">@color/chorus_cycle_bg</item>
+        <item name="chorusPlayerPillOn">@color/chorus_cycle_text</item>
+        <item name="chorusPlayerOnPillText">@color/chorus_cycle_bg</item>
+        <item name="chorusPlayerPillStrong">@color/chorus_cycle_text</item>
+        <item name="chorusPlayerOnStrongPillText">@color/chorus_cycle_bg</item>
     </style>
 </resources>

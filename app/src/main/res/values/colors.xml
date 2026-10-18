@@ -1,4 +1,131 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Chorus colour palettes: light, dark, and the cycle-mode overrides.
+
+  All three live here, in the *unqualified* values folder, and are picked by THEME
+  rather than by resource qualifier:
+
+    values/themes.xml        Theme.Chorus.Base -> chorus_light_*
+    values-night/themes.xml  Theme.Chorus.Base -> chorus_dark_*
+    values/themes.xml        Theme.Chorus.Cycle -> chorus_light_* + chorus_cycle_*
+
+  Why not the obvious values/ + values-night/ split? A @color referenced from a theme
+  resolves against the current resource configuration, so one `chorus_bg` would hand back
+  the night value the moment the phone is in dark mode — including for Theme.Chorus.Cycle,
+  which must stay bright no matter how the device is set. Keeping two palettes side by side
+  under distinct names lets the Cycle theme point at the light one unconditionally. The
+  qualifier still does its job, one level up, in values-night/themes.xml.
+
+  There is no values-night/colors.xml on purpose: nothing needs the qualifier at the colour
+  level, and one would silently break Theme.Chorus.Cycle. The only day/night colour split
+  in the app is the one drawable that cannot read a theme attribute — but it turns out to
+  need no split, so it lives here with the rest.
+
+-->
 <resources>
     <color name="ic_launcher_background">#101014</color>
+
+    <!-- ==================== light palette (DayNight, light) ==================== -->
+
+    <!-- Surfaces: a hair off-white page so white cards/art still read as separate. -->
+    <color name="chorus_light_bg">#FFF4F4F7</color>
+    <color name="chorus_light_surface">#FFFFFFFF</color>
+    <color name="chorus_light_surface_elevated">#FFFFFFFF</color>
+
+    <!-- Ink -->
+    <color name="chorus_light_text_primary">#FF101014</color>
+    <color name="chorus_light_text_secondary">#FF5B5B66</color>
+    <color name="chorus_light_text_muted">#FF8A8A96</color>
+    <color name="chorus_light_divider">#1F000000</color>
+
+    <!-- Amber accent. The raw amber is only ever a fill; ink ON amber needs the darkened
+         chorus_light_accent_text to stay legible on a light page. -->
+    <color name="chorus_light_accent">#FFFFC107</color>
+    <color name="chorus_light_accent_text">#FF8A6D00</color>
+
+    <color name="chorus_light_status_bar">@color/chorus_light_bg</color>
+    <color name="chorus_light_nav_bar">@color/chorus_light_bg</color>
+
+    <!-- The artwork placeholder wash, read directly from drawable/art_placeholder.xml.
+         One neutral value for every mode on purpose: it sits inside the adapter's own
+         luminance-aware row tile (see TrackAdapter.roundedSurface), which already adapts,
+         and a drawable cannot read ?attr — so a themed tint would need a second mechanism
+         for one grey. -->
+    <color name="chorus_art_placeholder_tint">#33808080</color>
+
+    <!-- Player: the page behind the artwork wash is light, so dark ink over a white scrim. -->
+    <color name="chorus_light_player_bg">#FFF4F4F7</color>
+    <color name="chorus_light_player_text">#FF101014</color>
+    <color name="chorus_light_player_text_secondary">#B3101014</color>
+    <color name="chorus_light_player_text_muted">#99101014</color>
+    <color name="chorus_light_player_text_shadow">#00000000</color>
+    <!-- Near-black card behind the artwork square, so a pale sleeve still reads on a pale
+         page. The dark palette makes this transparent and lets the art float instead. -->
+    <color name="chorus_light_player_art_card">#FF14141A</color>
+    <color name="chorus_light_player_scrim_mid">#CCFFFFFF</color>
+    <color name="chorus_light_player_scrim_low">#F2FFFFFF</color>
+    <color name="chorus_light_player_scrim_end">#FAFFFFFF</color>
+    <color name="chorus_light_player_surface">#FF101014</color>
+    <color name="chorus_light_player_on_surface">#FFFFFFFF</color>
+    <color name="chorus_light_player_pill">#1F000000</color>
+    <color name="chorus_light_player_pill_border">#33000000</color>
+    <color name="chorus_light_player_pill_on">#66FFC107</color>
+    <color name="chorus_light_player_on_pill_text">#FF101014</color>
+    <color name="chorus_light_player_pill_strong">#FF101014</color>
+    <color name="chorus_light_player_on_strong_pill_text">#FFFFFFFF</color>
+    <color name="chorus_light_player_ripple">#33000000</color>
+    <color name="chorus_light_player_seek_track">#33000000</color>
+    <color name="chorus_light_player_seek_thumb">#FF101014</color>
+    <color name="chorus_light_player_seek_halo">#40000000</color>
+
+    <!-- ==================== dark palette (DayNight, night) ===================== -->
+
+    <color name="chorus_dark_bg">#FF07070A</color>
+    <color name="chorus_dark_surface">#FF121218</color>
+    <color name="chorus_dark_surface_elevated">#FF1A1A22</color>
+
+    <color name="chorus_dark_text_primary">#FFFFFFFF</color>
+    <color name="chorus_dark_text_secondary">#B8FFFFFF</color>
+    <color name="chorus_dark_text_muted">#99FFFFFF</color>
+    <color name="chorus_dark_divider">#1AFFFFFF</color>
+
+    <!-- Amber is the accent in both modes; only the ink ON amber changes. -->
+    <color name="chorus_dark_accent">#FFFFC107</color>
+    <color name="chorus_dark_accent_text">#FFFFD54F</color>
+
+    <color name="chorus_dark_status_bar">@color/chorus_dark_bg</color>
+    <color name="chorus_dark_nav_bar">@color/chorus_dark_bg</color>
+
+    <!-- Player: light ink over a dark scrim, art floating with no card behind it. -->
+    <color name="chorus_dark_player_bg">#FF07070A</color>
+    <color name="chorus_dark_player_text">#FFFFFFFF</color>
+    <color name="chorus_dark_player_text_secondary">#B8FFFFFF</color>
+    <color name="chorus_dark_player_text_muted">#99FFFFFF</color>
+    <color name="chorus_dark_player_text_shadow">#99000000</color>
+    <color name="chorus_dark_player_art_card">#00000000</color>
+    <color name="chorus_dark_player_scrim_mid">#33000000</color>
+    <color name="chorus_dark_player_scrim_low">#B3000000</color>
+    <color name="chorus_dark_player_scrim_end">#F20A0A0E</color>
+    <color name="chorus_dark_player_surface">#FFFFFFFF</color>
+    <color name="chorus_dark_player_on_surface">#FF101014</color>
+    <color name="chorus_dark_player_pill">#1FFFFFFF</color>
+    <color name="chorus_dark_player_pill_border">#1AFFFFFF</color>
+    <color name="chorus_dark_player_pill_on">#66FFC107</color>
+    <color name="chorus_dark_player_on_pill_text">#FFFFD54F</color>
+    <color name="chorus_dark_player_pill_strong">#FFFFC107</color>
+    <color name="chorus_dark_player_on_strong_pill_text">#FF101014</color>
+    <color name="chorus_dark_player_ripple">#33FFFFFF</color>
+    <color name="chorus_dark_player_seek_track">#33FFFFFF</color>
+    <color name="chorus_dark_player_seek_thumb">#FFFFFFFF</color>
+    <color name="chorus_dark_player_seek_halo">#40FFFFFF</color>
+
+    <!-- ===================== cycle-mode overrides ============================= -->
+    <!-- Only what differs from the light palette for direct-sunlight legibility: pure
+         black ink, a pure white page, and no alpha in the text ramp. -->
+
+    <color name="chorus_cycle_bg">#FFFFFFFF</color>
+    <color name="chorus_cycle_text">#FF000000</color>
+    <color name="chorus_cycle_text_secondary">#FF1A1A1A</color>
+    <color name="chorus_cycle_text_muted">#FF2A2A30</color>
+    <color name="chorus_cycle_divider">#33000000</color>
 </resources>

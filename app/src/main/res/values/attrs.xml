@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Chorus design tokens.
+
+  Declared as *theme attributes*, not bare colour resources, because that is what lets
+  the same name carry different values per theme:
+
+    - values/themes.xml        Theme.Chorus.Base  -> the light values
+    - values-night/themes.xml  Theme.Chorus.Base  -> the dark values (resource qualifier)
+    - values/themes.xml        Theme.Chorus.Cycle -> light values + the bright overrides
+
+  Layouts reference them as ?attr/chorusXxx and Kotlin resolves them through the
+  Activity's theme (see ui/Theming.kt). A bare @color/chorusXxx reference would resolve
+  by *configuration* only, which is why it is never used for a themed surface — that is
+  the trap that would make cycle mode paint dark colours while the Cycle theme is active.
+
+  The colour values themselves live in values/colors.xml + values-night/colors.xml.
+-->
+<resources>
+    <!-- Core surfaces and text -->
+    <attr name="chorusBg" format="color" />
+    <attr name="chorusSurface" format="color" />
+    <attr name="chorusSurfaceElevated" format="color" />
+    <attr name="chorusTextPrimary" format="color" />
+    <attr name="chorusTextSecondary" format="color" />
+    <attr name="chorusTextMuted" format="color" />
+    <attr name="chorusDivider" format="color" />
+    <attr name="chorusAccent" format="color" />
+    <attr name="chorusAccentText" format="color" />
+
+    <!-- System bars. Ignored by the platform at targetSdk 35+ (edge-to-edge is forced),
+         but still honoured on older devices, and the *icon* contrast is handled in code. -->
+    <attr name="chorusStatusBar" format="color" />
+    <attr name="chorusNavBar" format="color" />
+
+    <!-- The neutral artwork wash is NOT here: drawable/art_placeholder.xml has to read it
+         with @color, which resolves by configuration, so it keeps one name across
+         values/ and values-night/ instead. -->
+
+    <!--
+      Full-screen player tokens. Separate from the core set because everything here sits
+      over the artwork backdrop, so its ramp runs the opposite way in the light theme
+      (dark ink on a light scrim) to the dark theme (light ink on a dark scrim).
+    -->
+    <attr name="chorusPlayerBg" format="color" />
+    <attr name="chorusPlayerText" format="color" />
+    <attr name="chorusPlayerTextSecondary" format="color" />
+    <attr name="chorusPlayerTextMuted" format="color" />
+    <attr name="chorusPlayerTextShadow" format="color" />
+    <!-- Near-black card behind the artwork square: keeps art readable when the page
+         behind it is light. Transparent in the dark theme, so art still floats. -->
+    <attr name="chorusPlayerArtCard" format="color" />
+    <attr name="chorusPlayerScrimMid" format="color" />
+    <attr name="chorusPlayerScrimLow" format="color" />
+    <attr name="chorusPlayerScrimEnd" format="color" />
+    <attr name="chorusPlayerSurface" format="color" />
+    <attr name="chorusPlayerOnSurface" format="color" />
+    <attr name="chorusPlayerPill" format="color" />
+    <attr name="chorusPlayerPillBorder" format="color" />
+    <attr name="chorusPlayerPillOn" format="color" />
+    <attr name="chorusPlayerOnPillText" format="color" />
+    <attr name="chorusPlayerPillStrong" format="color" />
+    <attr name="chorusPlayerOnStrongPillText" format="color" />
+    <attr name="chorusPlayerRipple" format="color" />
+    <attr name="chorusPlayerSeekTrack" format="color" />
+    <attr name="chorusPlayerSeekThumb" format="color" />
+    <attr name="chorusPlayerSeekHalo" format="color" />
+</resources>
