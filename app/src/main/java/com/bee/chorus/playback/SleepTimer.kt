@@ -11,11 +11,17 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Sleep timer: pause playback after N minutes, or when the current track ends.
  *
  * Pure in-memory state on purpose — it deliberately does not survive process death
- * (no service, no database, no persistence). While armed it owns at most one Handler
- * callback: a 1 Hz countdown for the timed modes, or one exactly-delayed "fire at
- * track end" runnable for [Mode.END_OF_TRACK] (re-armed from every player event, so
- * seeks, pauses and track changes stay correct). When it fires it pauses through the
- * shared [PlayerHolder] controller, so it works from any screen or with none open.
+ * (no service, no database, no persistence). While armed it owns at most two Handler
+ * callbacks, and only ever one *periodic* one:
+ *  - timed modes: a single [expire] runnable posted for the exact remaining time, plus a
+ *    1 Hz [tick] refresh **only while a listener is registered** (i.e. while a screen is
+ *    actually showing the countdown). Headless — screen closed, audio playing in the
+ *    background — the timer costs the main looper zero wakeups per second instead of the
+ *    ~3,600 a 60-minute countdown used to burn.
+ *  - [Mode.END_OF_TRACK]: one exactly-delayed "fire at track end" runnable, re-armed from
+ *    every player event, so seeks, pauses and track changes stay correct.
+ * When it fires it pauses through the shared [PlayerHolder] controller, so it works from
+ * any screen or with none open.
  *
  * Everything here runs on the main thread: start/cancel come from UI taps and the
  * player callbacks already arrive on the main looper. Listeners are held strongly —
@@ -31,6 +37,9 @@ object SleepTimer {
 
     private val main = Handler(Looper.getMainLooper())
 
+    /** Visible countdown refresh period. Only runs while a listener is registered. */
+    private const val COUNTDOWN_TICK_MS = 1_000L
+
     /** Held strongly; every current registration is paired with a view lifecycle. */
     private val listeners = CopyOnWriteArrayList<(SleepTimer) -> Unit>()
 
@@ -38,6 +47,9 @@ object SleepTimer {
 
     /** Countdown target on the elapsed-realtime clock (immune to wall-clock changes). */
     private var endTimeMs = 0L
+
+    /** True while a 1 Hz countdown refresh is in flight, so chains cannot stack up. */
+    private var tickScheduled = false
 
     // ---- end-of-track bookkeeping ----
 
@@ -54,8 +66,10 @@ object SleepTimer {
         disarm()
         mode = Mode.COUNTDOWN
         endTimeMs = SystemClock.elapsedRealtime() + minutes * 60_000L
-        main.post(tick)   // first tick refreshes the UI now and schedules the next
-        notifyListeners()
+        // The one callback that matters, watched or not: pause exactly at zero.
+        main.postDelayed(expire, remainingMs())
+        // The 1 Hz refresh only exists to redraw a visible countdown.
+        if (listeners.isNotEmpty()) ensureTick()
     }
 
     /** Let the current track finish, then pause. Replaces any current timer. */
@@ -86,6 +100,9 @@ object SleepTimer {
     /** Register for state/tick changes. Adding the same instance twice is a no-op. */
     fun addListener(l: (SleepTimer) -> Unit) {
         listeners.addIfAbsent(l)
+        // A countdown armed before this screen existed has no periodic refresh running;
+        // start one now, or the label would sit frozen until the next mode change.
+        if (mode == Mode.COUNTDOWN) ensureTick()
     }
 
     /** Unregister [l]. Safe to call when it was never added. */
@@ -98,7 +115,9 @@ object SleepTimer {
     /** Drop every pending callback and (if end-of-track) the player listener. */
     private fun disarm() {
         main.removeCallbacks(tick)
+        main.removeCallbacks(expire)
         main.removeCallbacks(fire)
+        tickScheduled = false
         if (mode == Mode.END_OF_TRACK) PlayerHolder.removePlayerListener(playerListener)
         armedMediaId = null
         nextFireAt = 0L
@@ -110,21 +129,61 @@ object SleepTimer {
 
     // ---- countdown ----
 
+    /**
+     * One UI refresh per second, and only while something is watching. If no listener is
+     * registered the countdown keeps no periodic callback at all — [expire] is already
+     * posted for the exact end, so a headless 60-minute timer wakes the looper once, not
+     * 3,600 times. Firing is [expire]'s job, not this runnable's, so the two can overlap
+     * harmlessly: whichever lands first pauses, and the other sees mode != COUNTDOWN.
+     */
     private val tick = object : Runnable {
         override fun run() {
+            tickScheduled = false
             if (mode != Mode.COUNTDOWN) return
             if (remainingMs() <= 0L) {
-                // Zero: pause playback and clear the timer. A paused or empty player
-                // makes the pause a no-op, which is still the right outcome.
-                PlayerHolder.whenReady { it.pause() }
-                disarm()
-                mode = Mode.OFF
-                notifyListeners()
-            } else {
-                notifyListeners()   // one UI update per second, nothing between
-                main.postDelayed(this, 1000L)
+                expireCountdown()
+                return
+            }
+            notifyListeners()   // one UI update per second, nothing between
+            if (listeners.isNotEmpty()) {
+                tickScheduled = true
+                main.postDelayed(this, COUNTDOWN_TICK_MS)
             }
         }
+    }
+
+    /** Start the 1 Hz refresh if one is not already running (avoids stacking chains). */
+    private fun ensureTick() {
+        if (mode != Mode.COUNTDOWN || tickScheduled) return
+        tickScheduled = true
+        main.post(tick)
+    }
+
+    /** The countdown's single wakeup when headless: pause playback at zero. */
+    // Explicit Runnable type: the lambda refers to itself (to re-post), which Kotlin's
+    // type checker cannot infer.
+    private val expire: Runnable = Runnable {
+        if (mode != Mode.COUNTDOWN) return@Runnable
+        val left = remainingMs()
+        if (left > 0L) {
+            // Woke early (only a stale post can do that): top the countdown up rather
+            // than pausing before the timer asked for it.
+            main.removeCallbacks(expire)
+            main.postDelayed(expire, left)
+            return@Runnable
+        }
+        expireCountdown()
+    }
+
+    /**
+     * Zero on a countdown: pause and clear the timer. A paused or empty player makes the
+     * pause a no-op, which is still the right outcome.
+     */
+    private fun expireCountdown() {
+        PlayerHolder.whenReady { it.pause() }
+        disarm()
+        mode = Mode.OFF
+        notifyListeners()
     }
 
     // ---- end of track ----

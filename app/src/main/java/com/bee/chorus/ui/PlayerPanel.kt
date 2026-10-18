@@ -99,7 +99,9 @@ class PlayerPanel @JvmOverloads constructor(
         lastPlayer?.let { renderStar(it) }
     }
 
-    // The sleep timer ticks once a second while armed; this redraws only its label.
+    // While this screen observes, SleepTimer refreshes its countdown once a second and
+    // this redraws only the label. With no listener registered there is no periodic tick
+    // at all, which is why register/unregister are part of show()/hide().
     private val sleepListener: (SleepTimer) -> Unit = { renderSleep() }
 
     init {
