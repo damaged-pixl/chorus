@@ -18,15 +18,15 @@ import com.bee.chorus.data.Track
 /**
  * RecyclerView adapter for a flat list of tracks.
  *
- * Rows come from `R.layout.item_track` (52dp rounded art, bold title,
- * "artist • album • year", tabular duration on the right).
+ * Rows come from `R.layout.item_track` (56dp rounded art, bold title,
+ * "artist • album • year", tabular duration on the right, favourite star).
  *
  * Tapping a row fires [onClick] with the *bound* position and the current list, so the
  * host can do `PlayerHolder.play(list, index)` without holding its own copy.
  *
- * Bind path discipline: no I/O, no decoding, no listener objects. The click listener
- * and the artwork shape are built once per recycled ViewHolder; every bind only reads
- * fields and hands a cache key to [Art].
+ * Bind path discipline: no I/O, no decoding, no listener objects. The click listener, the
+ * artwork shape, the now-playing cue and the star tint are built once per recycled
+ * ViewHolder; every bind only reads fields and hands a cache key to [Art].
  */
 class TrackAdapter(
     var onClick: ((Int, List<Track>) -> Unit)? = null,
@@ -34,6 +34,27 @@ class TrackAdapter(
 ) : RecyclerView.Adapter<TrackAdapter.VH>() {
 
     private val items = ArrayList<Track>()
+
+    /**
+     * MediaStore id of the track the shared player currently holds, or null when nothing is
+     * loaded. The host pushes it down (MainActivity reads the one PlayerHolder controller);
+     * a matching row then gets the now-playing cue — an accent bar on its leading edge over
+     * a faintly tinted row.
+     *
+     * Pushed rather than observed, for the same reason as [observeFavourites]: a listener
+     * registered from inside the adapter would need a host-lifecycle pairing this class
+     * cannot make safely.
+     */
+    var currentTrackId: Long? = null
+        set(value) {
+            val previous = field
+            if (previous == value) return
+            field = value
+            // Only the two rows that changed need rebinding.
+            for (i in items.indices) {
+                if (items[i].id == previous || items[i].id == value) notifyItemChanged(i)
+            }
+        }
 
     /**
      * The favourite star owns its own wiring: its state is read from [Favourites] at bind
@@ -101,6 +122,7 @@ class TrackAdapter(
         private val subtitle: TextView = view.findViewById(R.id.subtitle)
         private val duration: TextView = view.findViewById(R.id.duration)
         private val star: TextView = view.findViewById(R.id.track_star)
+        private val cue: View = view.findViewById(R.id.now_playing_bar)
 
         /** Off-star tint, resolved once per recycled holder, not per bind. */
         private val starOffColor = Theming.color(view.context, R.attr.chorusTextMuted)
@@ -108,12 +130,23 @@ class TrackAdapter(
         /** On-star tint: the amber accent, darkened on a light page so it still reads. */
         private val starOnColor = Theming.color(view.context, R.attr.chorusAccentText)
 
+        /** The row's two press/tint backgrounds, built once — a bind just swaps them. */
+        private val rowIdle = Ui.rowBackground(view.context, cue = false)
+        private val rowPlaying = Ui.rowBackground(view.context, cue = true)
+
+        /** Whether the row was drawn as the playing one, so a rebind does not re-set it. */
+        private var showingCue = false
+
         init {
             // Why in code, not a drawable resource: the row owns its own corner radius,
             // and a GradientDrawable is both the tinted placeholder and the outline
             // source that lets clipToOutline round the bitmap Art hands us.
             art.background = roundedSurface(view.context, ART_CORNER_DP)
             art.clipToOutline = true
+
+            // Cue colours are read off the theme here rather than in the layout: a @color
+            // resolves by configuration, not by theme, so it would ignore cycle mode.
+            cue.background = Ui.accentBar(view.context)
 
             // Set once: the handler resolves its own position at click time, so it never
             // needs re-binding and costs no allocation per bind.
@@ -141,6 +174,18 @@ class TrackAdapter(
 
         fun bind(t: Track) {
             title.text = t.title.ifBlank { UNKNOWN_TITLE }
+
+            // Now-playing cue: an accent bar down the leading edge over a faintly tinted
+            // row. Both are fills — the accent is never used as text, which would be
+            // unreadable on a light page. The bar's width is always reserved by the layout
+            // (invisible, not gone) so rows never shift as the cue moves, and the tint
+            // swaps between two prebuilt backgrounds rather than redrawing a drawable.
+            val playing = t.id == currentTrackId
+            cue.visibility = if (playing) View.VISIBLE else View.INVISIBLE
+            if (playing != showingCue) {
+                showingCue = playing
+                itemView.background = if (playing) rowPlaying else rowIdle
+            }
 
             // MediaStore drops fields it cannot fill in, so build from the parts that
             // actually exist instead of concatenating blindly (which left a leading
@@ -171,7 +216,7 @@ class TrackAdapter(
 
     private companion object {
         const val VIEW_TYPE = 1
-        /** Decode target for the 52dp thumbnail. 128px is what QueuePanel uses for this
+        /** Decode target for the 56dp thumbnail. 128px is what QueuePanel uses for this
          *  same layout, so both share Art's cache entry instead of holding two copies. */
         const val ART_PX = 128
         const val ART_CORNER_DP = 8f

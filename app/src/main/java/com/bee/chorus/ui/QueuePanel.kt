@@ -71,6 +71,11 @@ class QueuePanel @JvmOverloads constructor(
         listView.layoutManager = LinearLayoutManager(context)
         listView.adapter = adapter
 
+        // Pill backgrounds so "on" is visible at a glance: the label changes too, but the
+        // filled state is what reads from across the room. Selection state drives both.
+        shuffleButton.background = Ui.toggleBackground(context)
+        repeatButton.background = Ui.toggleBackground(context)
+
         shuffleButton.setOnClickListener {
             PlayerHolder.toggleShuffle()
             PlayerHolder.whenReady { c -> renderToggles(c) }

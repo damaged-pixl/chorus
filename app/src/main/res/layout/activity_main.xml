@@ -5,95 +5,211 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <!-- Tab strip: plain weighted buttons, no Material TabLayout, no ScrollView
-         (a ScrollView here collapsed the strip and let the list overlap it). -->
+    <!-- Tab strip: one weighted slot per tab, each holding the tab button (the ids
+         MainActivity wires up) plus an accent underline that only the selected tab shows.
+         Still a plain LinearLayout, not a ScrollView — a ScrollView here collapsed the
+         strip and let the list overlap it, and the six labels fit weighted slots easily.
+         Each tab's background/text colours are applied in code (Ui.tabBackground), so the
+         selected state needs no separate layout. -->
     <LinearLayout
         android:id="@+id/tab_strip"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:baselineAligned="false"
+        android:background="?android:attr/colorBackground"
         android:orientation="horizontal"
-        android:paddingStart="4dp"
-        android:paddingEnd="4dp">
+        android:paddingStart="6dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="6dp">
 
-        <Button
-            android:id="@+id/tab_tracks"
-            style="?android:attr/buttonStyleSmall"
+        <FrameLayout
             android:layout_width="0dp"
-            android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:singleLine="true"
-            android:textSize="11sp"
-            android:text="Tracks" />
+            android:layout_weight="1">
 
-        <Button
-            android:id="@+id/tab_albums"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:singleLine="true"
-            android:textSize="11sp"
-            android:text="Albums" />
+            <Button
+                android:id="@+id/tab_tracks"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="48dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:gravity="center"
+                android:singleLine="true"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:text="Tracks" />
 
-        <Button
-            android:id="@+id/tab_playlists"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:singleLine="true"
-            android:textSize="11sp"
-            android:text="Lists" />
+            <View
+                android:id="@+id/tab_indicator_tracks"
+                android:layout_width="20dp"
+                android:layout_height="2dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="6dp"
+                android:importantForAccessibility="no"
+                android:visibility="gone" />
+        </FrameLayout>
 
-        <Button
-            android:id="@+id/tab_search"
-            style="?android:attr/buttonStyleSmall"
+        <FrameLayout
             android:layout_width="0dp"
-            android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:singleLine="true"
-            android:textSize="11sp"
-            android:text="Search" />
+            android:layout_weight="1">
 
-        <Button
-            android:id="@+id/tab_queue"
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:singleLine="true"
-            android:textSize="11sp"
-            android:text="Queue" />
+            <Button
+                android:id="@+id/tab_albums"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="48dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:gravity="center"
+                android:singleLine="true"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:text="Albums" />
 
-        <Button
-            android:id="@+id/tab_settings"
-            style="?android:attr/buttonStyleSmall"
+            <View
+                android:id="@+id/tab_indicator_albums"
+                android:layout_width="20dp"
+                android:layout_height="2dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="6dp"
+                android:importantForAccessibility="no"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <FrameLayout
             android:layout_width="0dp"
-            android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:singleLine="true"
-            android:textSize="11sp"
-            android:text="Setup" />
+            android:layout_weight="1">
+
+            <Button
+                android:id="@+id/tab_playlists"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="48dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:gravity="center"
+                android:singleLine="true"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:text="Lists" />
+
+            <View
+                android:id="@+id/tab_indicator_playlists"
+                android:layout_width="20dp"
+                android:layout_height="2dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="6dp"
+                android:importantForAccessibility="no"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <Button
+                android:id="@+id/tab_search"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="48dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:gravity="center"
+                android:singleLine="true"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:text="Search" />
+
+            <View
+                android:id="@+id/tab_indicator_search"
+                android:layout_width="20dp"
+                android:layout_height="2dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="6dp"
+                android:importantForAccessibility="no"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <Button
+                android:id="@+id/tab_queue"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="48dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:gravity="center"
+                android:singleLine="true"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:text="Queue" />
+
+            <View
+                android:id="@+id/tab_indicator_queue"
+                android:layout_width="20dp"
+                android:layout_height="2dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="6dp"
+                android:importantForAccessibility="no"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <Button
+                android:id="@+id/tab_settings"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="48dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:gravity="center"
+                android:singleLine="true"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:text="Setup" />
+
+            <View
+                android:id="@+id/tab_indicator_settings"
+                android:layout_width="20dp"
+                android:layout_height="2dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="6dp"
+                android:importantForAccessibility="no"
+                android:visibility="gone" />
+        </FrameLayout>
     </LinearLayout>
+
+    <!-- Hairline between the strip and the content. Coloured in code so it follows the theme
+         instead of being baked into a drawable (see Ui.faintColor). -->
+    <View
+        android:id="@+id/tab_divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:importantForAccessibility="no" />
 
     <!-- One of: track list, album list, playlist list, playlist detail,
          SearchPanel, QueuePanel, settings. Only one is visible at a time. -->
@@ -117,19 +233,22 @@
                 android:layout_height="wrap_content"
                 android:gravity="start|center_vertical"
                 android:orientation="horizontal"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="2dp">
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp">
 
                 <TextView
                     android:id="@+id/sort_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
                     android:text="A–Z"
                     android:textColor="?android:attr/textColorSecondary"
                     android:textSize="12sp" />
@@ -138,11 +257,14 @@
                     android:id="@+id/sort_plays"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="6dp"
+                    android:background="?android:attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
                     android:text="Most played"
                     android:textColor="?android:attr/textColorSecondary"
                     android:textSize="12sp" />
@@ -151,11 +273,14 @@
                     android:id="@+id/sort_recent"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="6dp"
+                    android:background="?android:attr/selectableItemBackground"
                     android:clickable="true"
                     android:focusable="true"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
                     android:text="Recently played"
                     android:textColor="?android:attr/textColorSecondary"
                     android:textSize="12sp" />
@@ -165,13 +290,19 @@
                 android:id="@+id/track_list"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="1" />
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:paddingBottom="8dp"
+                android:scrollbars="vertical" />
         </LinearLayout>
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/album_list"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="8dp"
+            android:scrollbars="vertical"
             android:visibility="gone" />
 
         <LinearLayout
@@ -186,17 +317,35 @@
                  renamed or deleted with a real playlist. -->
             <Button
                 android:id="@+id/fav_playlist"
+                style="?android:attr/borderlessButtonStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="48dp"
-                android:text="★ Favourites" />
+                android:minWidth="0dp"
+                android:minHeight="56dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:gravity="start|center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="★ Favourites"
+                android:textAllCaps="false"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="16sp" />
 
             <Button
                 android:id="@+id/new_playlist"
+                style="?android:attr/borderlessButtonStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="48dp"
-                android:text="+ New playlist" />
+                android:minWidth="0dp"
+                android:minHeight="56dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:gravity="start|center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="+ New playlist"
+                android:textAllCaps="false"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="16sp" />
 
             <FrameLayout
                 android:layout_width="match_parent"
@@ -206,7 +355,10 @@
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/playlist_list"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:paddingBottom="8dp"
+                    android:scrollbars="vertical" />
 
                 <!-- One-line empty state, centred over the (empty) playlist list. -->
                 <TextView
@@ -215,7 +367,11 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:gravity="center"
-                    android:padding="24dp"
+                    android:lineSpacingExtra="4dp"
+                    android:paddingStart="32dp"
+                    android:paddingTop="40dp"
+                    android:paddingEnd="32dp"
+                    android:paddingBottom="40dp"
                     android:text="No playlists yet — tap ‘+ New playlist’ to make one"
                     android:textColor="?android:attr/textColorSecondary"
                     android:textSize="14sp"
@@ -259,7 +415,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
-                android:text="Chorus plays music stored on this phone only. It has no internet permission, no analytics and no ads." />
+                android:lineSpacingExtra="3dp"
+                android:text="Chorus plays music stored on this phone only. It has no internet permission, no analytics and no ads."
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="13sp" />
         </LinearLayout>
     </FrameLayout>
 

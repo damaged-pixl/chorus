@@ -108,6 +108,14 @@ class SearchPanel @JvmOverloads constructor(
     /** The list currently on screen (the filtered results). */
     fun results(): List<Track> = results
 
+    /**
+     * MediaStore id of the track the shared player holds, or null. Pushed down by the host
+     * (the same value the track list gets) so result rows carry the now-playing cue too.
+     */
+    fun setCurrentTrackId(id: Long?) {
+        adapter.currentTrackId = id
+    }
+
     // ---------------------------------------------------------------- search
 
     private fun runSearch(query: String) {

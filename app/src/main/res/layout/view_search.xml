@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Search panel: query field, results-count/empty line, results list.
-     Framework widgets only (EditText / TextView / RecyclerView): no Material. -->
+<!-- Search panel: query field, results-count line, results list.
+     Framework widgets only (EditText / TextView / RecyclerView): no Material.
+     Header rhythm matches the other panels — 16dp gutters, one quiet status line,
+     then content. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -10,15 +12,17 @@
         android:id="@+id/search_input"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginEnd="16dp"
         android:background="?android:attr/editTextBackground"
         android:hint="Search tracks, artists, albums"
         android:imeOptions="actionSearch"
         android:importantForAutofill="no"
         android:inputType="text"
         android:maxLines="1"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
         android:singleLine="true"
         android:textColor="?android:attr/textColorPrimary"
         android:textColorHint="?android:attr/textColorHint"
@@ -29,9 +33,9 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
+        android:layout_marginTop="4dp"
         android:layout_marginEnd="16dp"
-        android:layout_marginTop="6dp"
-        android:layout_marginBottom="2dp"
+        android:layout_marginBottom="10dp"
         android:maxLines="1"
         android:singleLine="true"
         android:text="0 results"
@@ -48,6 +52,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
+            android:paddingBottom="8dp"
             android:scrollbars="vertical" />
 
         <!-- One-line empty state, centred over the (empty) results list. -->
@@ -57,7 +62,11 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:gravity="center"
-            android:padding="24dp"
+            android:lineSpacingExtra="4dp"
+            android:paddingStart="32dp"
+            android:paddingTop="40dp"
+            android:paddingEnd="32dp"
+            android:paddingBottom="40dp"
             android:textColor="?android:attr/textColorSecondary"
             android:textSize="14sp"
             android:visibility="gone" />

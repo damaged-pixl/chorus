@@ -32,7 +32,9 @@ class MiniPlayer @JvmOverloads constructor(
 
     private val artView: ImageView
     private val titleView: TextView
+    private val artistView: TextView
     private val playPauseButton: TextView
+    private val dividerView: View
     private val progressView: View
 
     private var attached = false
@@ -51,8 +53,12 @@ class MiniPlayer @JvmOverloads constructor(
 
         artView = findViewById(R.id.mini_art)
         titleView = findViewById(R.id.mini_title)
+        artistView = findViewById(R.id.mini_artist)
         playPauseButton = findViewById(R.id.mini_play_pause)
+        dividerView = findViewById(R.id.mini_divider)
         progressView = findViewById(R.id.mini_progress)
+
+        styleBar()
 
         playPauseButton.setOnClickListener {
             PlayerHolder.whenReady { player ->
@@ -61,6 +67,23 @@ class MiniPlayer @JvmOverloads constructor(
         }
 
         visibility = View.GONE
+    }
+
+    // ---------------------------------------------------------------- styling
+
+    /**
+     * The bar is a raised surface, not the window background: a fill a hair off it plus a
+     * hairline along the top edge, so the list behind it reads as "behind". Both colours are
+     * derived from the theme in code, so the Cycle light theme follows for free.
+     */
+    private fun styleBar() {
+        // Surface comes from the layout's ?attr/chorusSurfaceElevated (palette-tuned in
+        // light, dark and Cycle) — setting a ColorDrawable here would paint over it.
+        dividerView.setBackgroundColor(Ui.themeColor(context, R.attr.chorusDivider, 0))
+        // Rounded thumbnail: the same shape doubles as the outline clipToOutline needs.
+        artView.background = Ui.roundedSurface(context, ART_CORNER_DP)
+        artView.clipToOutline = true
+        playPauseButton.background = Ui.circularTapTarget(context)
     }
 
     // ---------------------------------------------------------------- public
@@ -110,6 +133,13 @@ class MiniPlayer @JvmOverloads constructor(
 
         val title = metadata?.title?.toString().orEmpty()
         titleView.text = title.ifEmpty { NOTHING_PLAYING }
+
+        // Second line under the title: the artist, falling back to the album, so the bar
+        // says what it is playing without another row of controls.
+        val secondary = metadata?.artist?.toString()?.takeIf { it.isNotBlank() }
+            ?: metadata?.albumTitle?.toString()?.takeIf { it.isNotBlank() }
+        artistView.text = secondary.orEmpty()
+        artistView.visibility = if (secondary == null) View.INVISIBLE else View.VISIBLE
 
         val artUri = metadata?.artworkUri
         val artKey = artUri?.toString()
@@ -179,6 +209,7 @@ class MiniPlayer @JvmOverloads constructor(
 
     private companion object {
         const val ART_TARGET_PX = 128
+        const val ART_CORNER_DP = 8f
         const val DISABLED_ALPHA = 0.35f
         const val GLYPH_PLAY = "▶"
         const val GLYPH_PAUSE = "⏸"

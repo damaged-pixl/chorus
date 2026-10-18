@@ -4,6 +4,7 @@
   "artist • year • N tracks" — parts are dropped when the device does not know
   them (MediaStore YEAR is 0 for many files), so there is never a dangling
   separator. Artwork rounding comes from AlbumAdapter (shape + clipToOutline).
+  Left inset matches the track rows' artwork so the two lists line up.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -16,7 +17,7 @@
     android:clickable="true"
     android:focusable="true"
     android:paddingStart="14dp"
-    android:paddingEnd="12dp"
+    android:paddingEnd="14dp"
     android:paddingTop="10dp"
     android:paddingBottom="10dp">
 
@@ -40,7 +41,7 @@
             android:id="@+id/title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="17sp"
+            android:textSize="16sp"
             android:textStyle="bold"
             android:singleLine="true"
             android:ellipsize="end"

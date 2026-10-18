@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Playlist detail: name + track count, Play all / Shuffle all, then the track list.
-     Framework widgets only: no Material, no icon assets. -->
+     Framework widgets only: no Material, no icon assets. Header rhythm matches the
+     other panels — title, quiet count, one control row, then content. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -11,14 +12,15 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
         android:layout_marginEnd="16dp"
-        android:layout_marginTop="12dp"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
         android:maxLines="1"
         android:singleLine="true"
-        android:ellipsize="end"
         android:text="Playlist"
         android:textColor="?android:attr/textColorPrimary"
-        android:textSize="20sp"
+        android:textSize="19sp"
         android:textStyle="bold" />
 
     <TextView
@@ -26,13 +28,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
+        android:layout_marginTop="4dp"
         android:layout_marginEnd="16dp"
-        android:layout_marginTop="2dp"
         android:maxLines="1"
         android:singleLine="true"
         android:text="0 tracks"
         android:textColor="?android:attr/textColorSecondary"
-        android:textSize="12sp" />
+        android:textSize="13sp" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -40,16 +42,17 @@
         android:gravity="start|center_vertical"
         android:orientation="horizontal"
         android:paddingStart="12dp"
+        android:paddingTop="6dp"
         android:paddingEnd="12dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="4dp">
+        android:paddingBottom="8dp">
 
         <Button
             android:id="@+id/playlist_play_all"
+            style="?android:attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:minWidth="0dp"
-            android:minHeight="40dp"
+            android:minHeight="44dp"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
             android:text="Play all"
@@ -58,11 +61,12 @@
 
         <Button
             android:id="@+id/playlist_shuffle_all"
+            style="?android:attr/borderlessButtonStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:minWidth="0dp"
-            android:minHeight="40dp"
+            android:minHeight="44dp"
             android:paddingStart="14dp"
             android:paddingEnd="14dp"
             android:text="Shuffle all"
@@ -76,6 +80,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
+        android:paddingBottom="8dp"
         android:scrollbars="vertical" />
 
 </LinearLayout>
