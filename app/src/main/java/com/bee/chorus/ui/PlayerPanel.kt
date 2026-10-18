@@ -22,6 +22,7 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.graphics.ColorUtils
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.bee.chorus.R
@@ -38,8 +39,13 @@ import java.util.Locale
  * Lifecycle: call [show] to start observing and [hide] (or let the view detach) to stop.
  * The [PlayerHolder] listener is removed on detach so a finished screen leaves no callbacks.
  *
- * Everything visual here is drawn from code: no image assets, no fonts, no Material. The
- * artwork itself is decoded twice by [Art] — once at display size for the square, once at
+ * Everything visual here is drawn from code: no image assets, no fonts, no Material. Colours
+ * come from the *theme*'s player tokens (see [Theming]), never from a `@color` resource, so
+ * the screen follows the light, dark and Cycle palettes on its own. The one deliberate
+ * constant left is [ART_EDGE], the hairline around the artwork card — the card's own fill is
+ * the chorusPlayerArtCard token.
+ *
+ * The artwork itself is decoded twice by [Art] — once at display size for the square, once at
  * 64 px for the stretched backdrop — which is what keeps the screen cheap in RAM.
  */
 class PlayerPanel @JvmOverloads constructor(
@@ -50,11 +56,12 @@ class PlayerPanel @JvmOverloads constructor(
     private val backdropView: ImageView
     private val scrimView: View
     private val contentColumn: LinearLayout
-    private val artFrame: View
+    private val artCard: View
     private val artView: ImageView
     private val titleView: TextView
     private val artistView: TextView
     private val seekBar: SeekBar
+    private val previewView: TextView
     private val elapsedView: TextView
     private val totalView: TextView
     private val cycleButton: TextView
@@ -71,7 +78,8 @@ class PlayerPanel @JvmOverloads constructor(
     private val handler = Handler(Looper.getMainLooper())
 
     // Drawables are built once and re-used, so state changes never allocate. Each instance is
-    // owned by exactly one view — a Drawable must never be shared between two views.
+    // owned by exactly one view — a Drawable must never be shared between two views, and each
+    // pill therefore gets its own idle/on pair even where the two look identical.
     // Assigned in init (not as field initialisers) because they need the Activity theme,
     // which is only final once onCreate has chosen it.
     private val shuffleIdleBg: Drawable
@@ -81,6 +89,8 @@ class PlayerPanel @JvmOverloads constructor(
     private val repeatOneBg: Drawable
     private val starIdleBg: Drawable
     private val starOnBg: Drawable
+    private val sleepIdleBg: Drawable
+    private val sleepOnBg: Drawable
     private val cycleIdleBg: Drawable
     private val cycleOnBg: Drawable
 
@@ -94,6 +104,7 @@ class PlayerPanel @JvmOverloads constructor(
 
     private var attached = false
     private var scrubbing = false
+    private var previewShown = false
     private var lastArtKey: String? = null
     private var lastPlayer: Player? = null
     private var tickScheduled = false
@@ -102,6 +113,7 @@ class PlayerPanel @JvmOverloads constructor(
     private var lastStarId: Long? = null
     private var lastStarOn: Boolean? = null
     private var lastCycleOn: Boolean? = null
+    private var lastSleepArmed = false
     private var measuredSide = -1
 
     // Held as a property so the *same* instance can be handed back to removePlayerListener,
@@ -125,11 +137,12 @@ class PlayerPanel @JvmOverloads constructor(
         backdropView = findViewById(R.id.player_backdrop)
         scrimView = findViewById(R.id.player_scrim)
         contentColumn = findViewById(R.id.player_content)
-        artFrame = findViewById(R.id.player_art_frame)
+        artCard = findViewById(R.id.player_art_card)
         artView = findViewById(R.id.player_art)
         titleView = findViewById(R.id.player_title)
         artistView = findViewById(R.id.player_artist)
         seekBar = findViewById(R.id.player_seek)
+        previewView = findViewById(R.id.player_seek_preview)
         elapsedView = findViewById(R.id.player_elapsed)
         totalView = findViewById(R.id.player_total)
         cycleButton = findViewById(R.id.player_cycle)
@@ -160,13 +173,16 @@ class PlayerPanel @JvmOverloads constructor(
         repeatOneBg = pill(pillStrong, 0)
         starIdleBg = pill(pillIdle, pillBorder)
         starOnBg = pill(pillOn, 0)
+        sleepIdleBg = pill(pillIdle, pillBorder)
+        sleepOnBg = pill(pillOn, 0)
         cycleIdleBg = pill(pillIdle, pillBorder)
         cycleOnBg = pill(pillStrong, 0)
 
-        styleScrim()
-        styleArt()
+        styleBackdrop()
+        styleArtCard()
         styleSeekBar()
-        stylePlayPause()
+        styleTransport()
+        styleModes()
         wireSeekBar()
         wireButtons()
         setMarquee(titleView)
@@ -199,6 +215,8 @@ class PlayerPanel @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        // A fade interrupted by a detach can leave the art part-way down.
+        if (artView.alpha < 1f) artView.alpha = 1f
         if (attached && lastPlayer?.isPlaying == true) scheduleTick()
     }
 
@@ -210,7 +228,7 @@ class PlayerPanel @JvmOverloads constructor(
     // ---------------------------------------------------------------- measure
 
     /**
-     * Forces the artwork frame to a square so album art is never squashed and almost never
+     * Forces the artwork card to a square so album art is never squashed and almost never
      * cropped. Whatever height is left over collapses and the content column re-centres
      * (gravity="center_vertical"), which keeps the screen honest in landscape and on short
      * displays. Only recomputed when the available box actually changes.
@@ -234,8 +252,8 @@ class PlayerPanel @JvmOverloads constructor(
         var usedElsewhere = contentColumn.paddingTop + contentColumn.paddingBottom
         for (i in 0 until contentColumn.childCount) {
             val child = contentColumn.getChildAt(i)
-            if (child === artFrame) continue
-            // Margins matter here — the art frame is giving up its space to its siblings.
+            if (child === artCard) continue
+            // Margins matter here — the art card is giving up its space to its siblings.
             measureChildWithMargins(
                 child,
                 widthSpec,
@@ -245,12 +263,15 @@ class PlayerPanel @JvmOverloads constructor(
             )
             usedElsewhere += child.measuredHeight
         }
-        val side = minOf(innerWidth, availableHeight - usedElsewhere).coerceAtLeast(0)
+        // No art at all beats a 20dp sliver: when the fixed rows take the whole height (a
+        // landscape phone) the art column collapses and the controls stay on screen.
+        val spare = minOf(innerWidth, availableHeight - usedElsewhere)
+        val side = if (spare >= dp(MIN_ART_DP)) spare else 0
         if (side == measuredSide) return
         measuredSide = side
         // Mutated in place, deliberately: assigning back to layoutParams would requestLayout()
         // from inside measure. LinearLayout reads these same fields moments later.
-        val lp = artFrame.layoutParams as LinearLayout.LayoutParams
+        val lp = artCard.layoutParams as LinearLayout.LayoutParams
         lp.height = side
         lp.weight = 0f
     }
@@ -258,11 +279,14 @@ class PlayerPanel @JvmOverloads constructor(
     // ---------------------------------------------------------------- styling
 
     /**
-     * Bottom-heavy scrim so text and controls stay legible over bright artwork. It is a
-     * *themed* ramp, not a fixed black one: light mode fades to near-white so the dark
-     * player text reads, dark mode keeps today's fade to near-black.
+     * The page: a soft wash of the current artwork, faded back hard under a bottom-heavy
+     * gradient so text and controls stay legible over a bright sleeve. The ramp is a
+     * *themed* one (chorusPlayerScrim*), not a fixed black: light and Cycle fade to
+     * near-white so the dark player text reads, dark keeps the fade to near-black — which is
+     * what lets one layout read in all three palettes instead of a scrim tuned for one.
      */
-    private fun styleScrim() {
+    private fun styleBackdrop() {
+        backdropView.alpha = BACKDROP_ALPHA
         scrimView.background = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(
@@ -275,17 +299,26 @@ class PlayerPanel @JvmOverloads constructor(
     }
 
     /**
-     * Rounded corners and a real drop shadow, without a nine-patch or an outline asset.
-     * The outline is recomputed by the framework on every resize, so nothing is allocated
-     * per frame.
+     * The hero: a mat with rounded corners and a real drop shadow, under the artwork. The mat
+     * is what stops a pale sleeve dissolving into a pale page, and the shadow is what makes
+     * the card read as an object rather than a rectangle of colour. The outline is recomputed
+     * by the framework on every resize, so nothing is allocated per frame.
      *
-     * In the light (and cycle) themes the artwork additionally sits on a near-black card,
-     * because a pale sleeve on a pale page is otherwise unreadable. In the dark theme the
-     * card token is transparent and nothing is drawn, which keeps the art floating over
-     * the backdrop exactly as before.
+     * In the light and Cycle themes the token is a near-black card, because a pale sleeve on
+     * a pale page is otherwise unreadable; in the dark theme it is transparent and nothing is
+     * filled, which keeps the art floating over the backdrop.
      */
-    private fun styleArt() {
-        val radius = dp(ART_CORNER_DP).toFloat()
+    private fun styleArtCard() {
+        val radius = Ui.dp(context, ART_CORNER_DP)
+        artCard.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = radius
+            setColor(Theming.color(context, R.attr.chorusPlayerArtCard))
+            // A hairline of light, so the card's edge reads on a dark page too. Still a
+            // literal — see ART_EDGE for why there is no token for it yet.
+            setStroke(dp(1), ART_EDGE)
+        }
+        artCard.elevation = dp(16).toFloat()
         artView.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
                 if (view.width <= 0 || view.height <= 0) return
@@ -293,36 +326,35 @@ class PlayerPanel @JvmOverloads constructor(
             }
         }
         artView.clipToOutline = true
-        artView.elevation = dp(16).toFloat()
-
-        val card = Theming.color(context, R.attr.chorusPlayerArtCard)
-        if (card != Color.TRANSPARENT) {
-            artFrame.background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = radius
-                setColor(card)
-            }
-        }
     }
 
-    /** Custom track + thumb: rounded 4 dp track, accent fill, oversized grab handle. */
+    /**
+     * Custom track, buffered band and thumb. Colours are read off the theme and baked into
+     * the layers — the same route the progress fill already took — so the framework's
+     * secondary progress slot (which nothing used to set) now draws the buffer as well.
+     */
     private fun styleSeekBar() {
-        val corner = dp(2).toFloat()
+        val corner = Ui.dp(context, TRACK_CORNER_DP)
+        // The buffered band sits between the track and the fill, so it reads as a softer
+        // version of the secondary ink rather than as a third full-strength colour.
+        val secondary = Theming.color(context, R.attr.chorusPlayerTextSecondary)
 
-        val background = GradientDrawable().apply {
+        fun layer(color: Int) = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = corner
-            setColor(Theming.color(context, R.attr.chorusPlayerSeekTrack))
+            setColor(color)
         }
-        val progress = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = corner
-            setColor(accent)
-        }
-        seekBar.progressDrawable = LayerDrawable(arrayOf(
-            background,
-            ClipDrawable(progress, Gravity.START, ClipDrawable.HORIZONTAL)
-        ))
+        seekBar.progressDrawable = LayerDrawable(
+            arrayOf(
+                layer(Theming.color(context, R.attr.chorusPlayerSeekTrack)),
+                ClipDrawable(
+                    layer(ColorUtils.setAlphaComponent(secondary, BUFFER_ALPHA)),
+                    Gravity.START,
+                    ClipDrawable.HORIZONTAL
+                ),
+                ClipDrawable(layer(accent), Gravity.START, ClipDrawable.HORIZONTAL),
+            )
+        )
 
         val halo = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
@@ -344,14 +376,28 @@ class PlayerPanel @JvmOverloads constructor(
         seekBar.thumb = thumb
         seekBar.thumbOffset = 0
         seekBar.minimumHeight = dp(32)
+
+        // The scrub preview: solid accent pill, so the position reads over any artwork. Its glyph
+        // is inked off the accent's own luminance, because the accent stays amber in every
+        // palette (unlike the "on" pill fills) and neither a fixed white nor a fixed black is
+        // legible on it everywhere.
+        previewView.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = Ui.dp(context, PREVIEW_CORNER_DP)
+            setColor(accent)
+        }
+        previewView.setTextColor(inkOn(accent))
+        previewView.elevation = dp(6).toFloat()
     }
 
     /**
-     * The one filled control on the screen. The disc inverts with the theme — white with a
-     * dark glyph in dark mode, near-black with a white glyph in light/cycle — so it stays
-     * the highest-contrast target on the page either way.
+     * The transport row: the one filled control on the screen is play/pause, in the middle,
+     * with framework ripple targets either side of it. The disc inverts with the theme —
+     * white with a dark glyph in dark mode, near-black with a white glyph in light and Cycle —
+     * so it stays the highest-contrast target on the page either way, and in sunlight the
+     * Cycle theme's black disc is the one that reads.
      */
-    private fun stylePlayPause() {
+    private fun styleTransport() {
         val disc = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(Theming.color(context, R.attr.chorusPlayerSurface))
@@ -361,14 +407,37 @@ class PlayerPanel @JvmOverloads constructor(
             disc,
             GradientDrawable().apply { shape = GradientDrawable.OVAL }
         )
+        playPauseButton.setTextColor(Theming.color(context, R.attr.chorusPlayerOnSurface))
         playPauseButton.elevation = dp(6).toFloat()
     }
 
-    /** Rounded pill used by the mode buttons, in its three visual weights. */
+    /**
+     * The four mode pills, in their idle weight before anything is playing: a faintly filled
+     * pill with a hairline border, so the target is visible on the page rather than an
+     * invisible patch of glyph, and muted labels. The "on" weights are swapped in by
+     * [renderModes], [renderStar] and [renderSleep], one at a time.
+     */
+    private fun styleModes() {
+        shuffleButton.background = shuffleIdleBg
+        repeatButton.background = repeatIdleBg
+        starButton.background = starIdleBg
+        sleepButton.background = sleepIdleBg
+        for (view in listOf(shuffleButton, repeatButton, starButton, sleepButton)) {
+            view.setTextColor(mutedText)
+        }
+    }
+
+    /**
+     * Rounded pill used by the mode buttons and the cycle control, in three visual weights:
+     * idle (fill + border), on (accent tint) and strong (solid, for repeat-one and cycle mode
+     * — amber on amber is unreadable in sun, so those go black there). The mask keeps the
+     * ripple inside the rounded shape.
+     */
     private fun pill(fill: Int, border: Int): Drawable {
+        val corner = Ui.dp(context, PILL_CORNER_DP)
         val body = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(26).toFloat()
+            cornerRadius = corner
             setColor(fill)
             if (border != 0) setStroke(dp(1), border)
         }
@@ -377,10 +446,18 @@ class PlayerPanel @JvmOverloads constructor(
             body,
             GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(26).toFloat()
+                cornerRadius = corner
             }
         )
     }
+
+    /**
+     * Ink or paper for a glyph sitting on [fill], decided by the fill's own luminance. The one
+     * use is the scrub preview, which is a solid accent in every palette: neither a fixed
+     * white nor a fixed black is legible on amber everywhere.
+     */
+    private fun inkOn(fill: Int): Int =
+        if (ColorUtils.calculateLuminance(fill) > LUMINANCE_PIVOT) INK else Color.WHITE
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
@@ -414,6 +491,7 @@ class PlayerPanel @JvmOverloads constructor(
         val artKey = artUri?.toString()
         if (artKey != lastArtKey) {
             lastArtKey = artKey
+            fadeInArt()
             if (artUri != null) {
                 Art.load(context, artView, artUri, ART_TARGET_PX)
                 // Second, deliberately tiny decode (~16 KB) stretched behind everything:
@@ -439,22 +517,29 @@ class PlayerPanel @JvmOverloads constructor(
         val duration = player.duration
         val known = duration != C.TIME_UNSET && duration > 0L
 
-        seekBar.isEnabled = known && !scrubbing
+        // Never disable the bar mid-drag: that would cancel tracking and commit the seek to
+        // whatever the thumb happened to be over.
+        seekBar.isEnabled = known
         if (known) {
             val max = duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             if (seekBar.max != max) seekBar.max = max
+            val buffered = player.bufferedPosition.coerceIn(0L, max.toLong()).toInt()
+            if (seekBar.secondaryProgress != buffered) seekBar.secondaryProgress = buffered
             if (!scrubbing) {
                 seekBar.progress = player.currentPosition.coerceIn(0L, max.toLong()).toInt()
                 elapsedView.text = formatTime(player.currentPosition)
             }
-            totalView.text = formatTime(duration)
+            // The duration only changes on a track change; not every tick's business.
+            val total = formatTime(duration)
+            if (totalView.text != total) totalView.text = total
         } else {
             if (seekBar.max != 0) seekBar.max = 0
+            if (seekBar.secondaryProgress != 0) seekBar.secondaryProgress = 0
             if (!scrubbing) {
                 seekBar.progress = 0
                 elapsedView.text = ZERO_TIME
             }
-            totalView.text = ZERO_TIME
+            if (totalView.text != ZERO_TIME) totalView.text = ZERO_TIME
         }
     }
 
@@ -473,13 +558,14 @@ class PlayerPanel @JvmOverloads constructor(
     }
 
     /**
-     * Shuffle and repeat live on the engine but had no control here. Each state gets its own
-     * glyph, pill and colour so the mode is readable at a glance — on a bike you do not get
-     * to squint at a grey icon.
+     * Shuffle and repeat live on the engine but had no control here. The pill weight and the
+     * label colour carry the whole signal — an accent pill for "on", a stronger one for
+     * repeat-one, muted ink for off — so the mode is readable at a glance, on a bike you do
+     * not get to squint at a grey icon.
      *
      * Updates are guarded on the previous values because the listener fires for every player
-     * event, and re-setting a background/text would be wasted work (and a redundant
-     * invalidate) during the 500 ms tick's event storm.
+     * event, and re-setting state would be wasted work (and a redundant invalidate) during the
+     * 500 ms tick's event storm.
      */
     private fun renderModes(player: Player) {
         val shuffleOn = player.shuffleModeEnabled
@@ -505,6 +591,7 @@ class PlayerPanel @JvmOverloads constructor(
                 }
                 Player.REPEAT_MODE_ONE -> {
                     repeatButton.text = GLYPH_REPEAT_ONE
+                    // Stronger than "all": one track repeating is the mode worth noticing.
                     repeatButton.setBackground(repeatOneBg)
                     repeatButton.setTextColor(onStrongPillText)
                     repeatButton.contentDescription = "Repeating one track, tap to turn off"
@@ -525,8 +612,8 @@ class PlayerPanel @JvmOverloads constructor(
     }
 
     /**
-     * Favourite star for the current track. Guarded on (track, liked) like the mode pills,
-     * so the 500 ms tick's event storm never re-sets text or backgrounds needlessly.
+     * Favourite star for the current track. Guarded on (track, liked) like the mode pills, so
+     * the 500 ms tick's event storm never re-sets text or state needlessly.
      * The id doubles as the toggle target for the click handler.
      */
     private fun renderStar(player: Player) {
@@ -555,34 +642,39 @@ class PlayerPanel @JvmOverloads constructor(
     }
 
     /**
-     * Sleep-timer label between the elapsed and total times: a bare clock glyph when
-     * off, the live countdown (or "End of track") in the accent colour when armed.
-     * Called once in [show] and then once per SleepTimer tick/change via [sleepListener].
+     * Sleep-timer pill: a bare clock glyph in the idle weight when off, the live countdown (or
+     * "⏱ End of track") in the accent weight when armed. Only the armed/off transition touches
+     * the pill and the label ink; the countdown text itself is rewritten every tick. Called
+     * once in [show] and then once per SleepTimer tick/change via [sleepListener].
      */
     private fun renderSleep() {
-        when (SleepTimer.mode()) {
-            SleepTimer.Mode.OFF -> {
-                sleepButton.text = GLYPH_SLEEP
-                sleepButton.setTextColor(mutedText)
-                sleepButton.contentDescription = "Sleep timer off, tap to set"
+        val mode = SleepTimer.mode()
+        val armed = mode != SleepTimer.Mode.OFF
+        if (armed != lastSleepArmed) {
+            lastSleepArmed = armed
+            sleepButton.setBackground(if (armed) sleepOnBg else sleepIdleBg)
+            sleepButton.setTextColor(if (armed) accentText else mutedText)
+            sleepButton.contentDescription = when (mode) {
+                SleepTimer.Mode.OFF -> "Sleep timer off, tap to set"
+                SleepTimer.Mode.COUNTDOWN ->
+                    "Sleep timer running, tap to change or cancel"
+                SleepTimer.Mode.END_OF_TRACK ->
+                    "Sleeping at end of track, tap to change or cancel"
             }
-            SleepTimer.Mode.COUNTDOWN -> {
-                sleepButton.text = GLYPH_SLEEP + " " + formatTime(SleepTimer.remainingMs())
-                sleepButton.setTextColor(accentText)
-                sleepButton.contentDescription = "Sleep timer running, tap to change or cancel"
-            }
-            SleepTimer.Mode.END_OF_TRACK -> {
-                sleepButton.text = END_OF_TRACK_LABEL
-                sleepButton.setTextColor(accentText)
-                sleepButton.contentDescription = "Sleeping at end of track, tap to change or cancel"
-            }
+        }
+        // The countdown text is rewritten every tick — only its state is worth guarding.
+        sleepButton.text = when (mode) {
+            SleepTimer.Mode.OFF -> GLYPH_SLEEP
+            SleepTimer.Mode.COUNTDOWN -> GLYPH_SLEEP + " " + formatTime(SleepTimer.remainingMs())
+            SleepTimer.Mode.END_OF_TRACK -> GLYPH_SLEEP + " " + END_OF_TRACK_LABEL
         }
     }
 
     /**
-     * Cycle-mode sun in the time row, next to the sleep control. Cycle mode is the one
-     * manual appearance override left in the app (the rest is the system UI mode), and it
-     * is reachable here as well as on the Setup tab.
+     * Cycle-mode sun in the centre of the time row — the slot the sleep control left when it
+     * moved into the modes row. Cycle mode is the one manual appearance override left in the
+     * app (the rest is the system UI mode), and it is reachable here as well as on the Setup
+     * tab.
      *
      * Tapping only persists: the host Activity listens for the change and calls
      * `recreate()`, which re-inflates this panel under the new theme. So there is nothing
@@ -634,18 +726,27 @@ class PlayerPanel @JvmOverloads constructor(
 
     // ---------------------------------------------------------------- wiring
 
+    /**
+     * Drag handling. While the finger is down the 500 ms tick is stood down ([scrubbing]), so
+     * the bar tracks the thumb exactly; on release the position is committed to the shared
+     * player and the tick picks the bar up again.
+     */
     private fun wireSeekBar() {
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) elapsedView.text = formatTime(progress.toLong())
+                if (!fromUser) return
+                elapsedView.text = formatTime(progress.toLong())
+                showPreview(progress)
             }
 
             override fun onStartTrackingTouch(sb: SeekBar?) {
                 scrubbing = true
+                showPreview(sb?.progress ?: 0)
             }
 
             override fun onStopTrackingTouch(sb: SeekBar?) {
                 scrubbing = false
+                hidePreview()
                 val target = (sb?.progress ?: 0).toLong()
                 elapsedView.text = formatTime(target)
                 PlayerHolder.whenReady { it.seekTo(target) }
@@ -711,12 +812,56 @@ class PlayerPanel @JvmOverloads constructor(
         sleepButton.setOnClickListener { sleepDialog() }
     }
 
+    // ---------------------------------------------------------------- scrub preview
+
+    /**
+     * The timestamp the drag would land on, floating above the thumb. The view is always laid
+     * out (alpha 0 rather than GONE) so its width is known before the first drag and the pill
+     * lands in the right place on the first frame instead of the second.
+     */
+    private fun showPreview(progress: Int) {
+        previewView.text = formatTime(progress.toLong())
+        movePreview(progress)
+        if (!previewShown) {
+            previewShown = true
+            previewView.animate().alpha(1f).setDuration(FADE_MS).start()
+        }
+    }
+
+    private fun hidePreview() {
+        if (!previewShown) return
+        previewShown = false
+        previewView.animate().alpha(0f).setDuration(FADE_MS).start()
+    }
+
+    /**
+     * Follows the thumb. A SeekBar does not expose its thumb position, so the bar's own box is
+     * the honest approximation of its travel; the pill is clamped inside the row either way.
+     */
+    private fun movePreview(progress: Int) {
+        val max = seekBar.max
+        val bar = seekBar.width
+        if (max <= 0 || bar <= 0) return
+        val travel = seekBar.left + progress.toFloat() / max * bar
+        val host = (previewView.parent as? View)?.width ?: 0
+        val slack = (host - previewView.width).toFloat().coerceAtLeast(0f)
+        previewView.translationX = (travel - previewView.width / 2f).coerceIn(0f, slack)
+    }
+
+    /** A short alpha fade on each artwork change — cheap, and it hides the decode pop. */
+    private fun fadeInArt() {
+        artView.animate().cancel()
+        artView.alpha = 0f
+        artView.animate().alpha(1f).setDuration(FADE_MS).start()
+    }
+
     // ---------------------------------------------------------------- ticker
 
     /**
      * Player.Listener has no position callback, so an advancing seek bar needs one short
-     * main-thread tick. It only runs while audio is playing and this view is attached, and
-     * stops itself on pause/detach — no background work, no work when idle.
+     * main-thread tick. It only runs while audio is playing and this view is attached, skips
+     * the position entirely while a drag is in progress, and stops itself on pause/detach — no
+     * background work, no work when idle.
      */
     private val tick = object : Runnable {
         override fun run() {
@@ -758,9 +903,33 @@ class PlayerPanel @JvmOverloads constructor(
         // MediaStore.loadThumbnail, so no full-resolution bitmap ever exists.
         const val ART_TARGET_PX = 512
         const val BACKDROP_TARGET_PX = 64
-        const val ART_CORNER_DP = 20
+
+        /**
+         * The hairline around the artwork card, so its edge reads on a dark page too. Still a
+         * literal: the card's *fill* is the `chorusPlayerArtCard` token, but there is no token
+         * for this edge yet — one is needed before it can follow the palette. (Phase C's other
+         * literal, ART_MAT, is gone: that fill is the token now.)
+         */
+        const val ART_EDGE = 0x1AFFFFFF
+        const val ART_CORNER_DP = 22f
+        const val MIN_ART_DP = 96
+
+        /** How far the artwork wash is faded back — the scrim supplies the legibility. */
+        const val BACKDROP_ALPHA = 0.35f
+
+        const val TRACK_CORNER_DP = 2f
+        /** How much of the secondary ink the buffered band is drawn at. */
+        const val BUFFER_ALPHA = 0x73
+
+        const val PILL_CORNER_DP = 18f
+        const val PREVIEW_CORNER_DP = 14f
+
+        const val LUMINANCE_PIVOT = 0.5f
+        const val INK = 0xFF101014.toInt()
+
         const val SKIP_MS = 10_000L
         const val TICK_MS = 500L
+        const val FADE_MS = 180L
         const val DISABLED_ALPHA = 0.35f
 
         const val GLYPH_PLAY = "▶"
