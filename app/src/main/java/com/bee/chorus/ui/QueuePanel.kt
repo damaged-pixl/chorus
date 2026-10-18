@@ -47,7 +47,7 @@ class QueuePanel @JvmOverloads constructor(
                 }
             }
         },
-        onRowLongClick = { position, title -> showRowOptions(position, title) }
+        onRowLongClick = { mediaId, title -> showRowOptions(mediaId, title) }
     )
 
     private var observing = false
@@ -165,9 +165,11 @@ class QueuePanel @JvmOverloads constructor(
             contentSignature = signature
             val rows = ArrayList<QueueRow>(count)
             for (i in 0 until count) {
-                val metadata = player.getMediaItemAt(i).mediaMetadata
+                val item = player.getMediaItemAt(i)
+                val metadata = item.mediaMetadata
                 rows.add(
                     QueueRow(
+                        mediaId = item.mediaId,
                         title = metadata.title?.toString().orEmpty().ifBlank { UNKNOWN_TITLE },
                         artist = metadata.artist?.toString().orEmpty().ifBlank { UNKNOWN_ARTIST },
                         album = metadata.albumTitle?.toString().orEmpty(),
@@ -197,50 +199,67 @@ class QueuePanel @JvmOverloads constructor(
 
     // ---------------------------------------------------------------- queue editing
 
-    /** Long-press options for one queue row: reorder or remove. */
-    private fun showRowOptions(position: Int, title: String) {
+    /**
+     * Long-press options for one queue row: reorder or remove.
+     *
+     * Keyed on the row's mediaId, not the index it had when the sheet opened. The queue
+     * can auto-advance (or the user can skip) while the sheet is up, which shifts every
+     * index below it — acting on the captured position would then move or remove a
+     * different track. Each handler re-resolves the index from the mediaId against the
+     * live controller, so the action always lands on the row that was long-pressed.
+     */
+    private fun showRowOptions(mediaId: String, title: String) {
         val options = arrayOf("Move up", "Move down", "Remove from queue")
         AlertDialog.Builder(context)
             .setTitle(title)
             .setItems(options) { _, which ->
-                when (which) {
-                    0 -> moveItem(position, position - 1)
-                    1 -> moveItem(position, position + 1)
-                    else -> removeItem(position)
+                PlayerHolder.whenReady { c ->
+                    val index = indexOfMediaId(c, mediaId)
+                    when (which) {
+                        0 -> moveItem(c, index, index - 1)
+                        1 -> moveItem(c, index, index + 1)
+                        else -> removeItem(c, index)
+                    }
                 }
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
+    /** Live index of [mediaId] in the real queue, or -1 once it is no longer there. */
+    private fun indexOfMediaId(player: Player, mediaId: String): Int {
+        for (i in 0 until player.mediaItemCount) {
+            if (player.getMediaItemAt(i).mediaId == mediaId) return i
+        }
+        return -1
+    }
+
     /**
      * Swap one row through the real controller ([Player] owns moveMediaItem), so the
      * queue the notification and lock screen see is the same one on screen. Bounds are
-     * checked against the live count, which makes an edge move a harmless no-op.
+     * checked against the live count, which makes an edge move — or a row that has since
+     * left the queue entirely (index -1) — a harmless no-op.
      */
-    private fun moveItem(from: Int, to: Int) {
-        PlayerHolder.whenReady { c ->
-            if (from != to && from in 0 until c.mediaItemCount && to in 0 until c.mediaItemCount) {
-                c.moveMediaItem(from, to)
-                contentSignature = null   // interior moves are invisible to the signature
-            }
+    private fun moveItem(player: Player, from: Int, to: Int) {
+        if (from != to && from in 0 until player.mediaItemCount && to in 0 until player.mediaItemCount) {
+            player.moveMediaItem(from, to)
+            contentSignature = null   // interior moves are invisible to the signature
         }
     }
 
-    private fun removeItem(position: Int) {
-        PlayerHolder.whenReady { c ->
-            if (position in 0 until c.mediaItemCount) {
-                // Removing the current item is Media3's own problem (playback slides to
-                // whatever now sits in its slot); here we only force the row rebuild.
-                c.removeMediaItem(position)
-                contentSignature = null
-            }
+    private fun removeItem(player: Player, index: Int) {
+        if (index in 0 until player.mediaItemCount) {
+            // Removing the current item is Media3's own problem (playback slides to
+            // whatever now sits in its slot); here we only force the row rebuild.
+            player.removeMediaItem(index)
+            contentSignature = null
         }
     }
 
     // ---------------------------------------------------------------- adapter
 
     private data class QueueRow(
+        val mediaId: String,
         val title: String,
         val artist: String,
         val album: String,
@@ -258,7 +277,7 @@ class QueuePanel @JvmOverloads constructor(
      */
     private inner class QueueAdapter(
         private val onRowClick: (Int) -> Unit,
-        private val onRowLongClick: (Int, String) -> Unit
+        private val onRowLongClick: (String, String) -> Unit
     ) : RecyclerView.Adapter<QueueAdapter.VH>() {
 
         private val items = ArrayList<QueueRow>()
@@ -325,7 +344,9 @@ class QueuePanel @JvmOverloads constructor(
                 itemView.setOnLongClickListener {
                     val p = bindingAdapterPosition
                     if (p != RecyclerView.NO_POSITION) {
-                        onRowLongClick(p, row.title)
+                        // mediaId, not the position: the options sheet outlives the row's
+                        // index (the queue can advance while it is open).
+                        onRowLongClick(row.mediaId, row.title)
                         true
                     } else {
                         false
