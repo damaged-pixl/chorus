@@ -38,6 +38,13 @@ object PlayerHolder {
     /** True once the controller exists. */
     val isReady: Boolean get() = controller != null
 
+    /**
+     * The live controller viewed as a read-only [Player], or null before binding
+     * completes. For observers that need state without an action (the sleep timer's
+     * countdown checks duration/position); mutators still go through [whenReady].
+     */
+    val player: Player? get() = controller
+
     /** Begin binding (idempotent). Safe to call from the main thread. */
     fun bind(context: Context) {
         if (binding || controller != null) return

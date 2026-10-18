@@ -21,11 +21,13 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.bee.chorus.R
 import com.bee.chorus.data.Favourites
 import com.bee.chorus.playback.PlayerHolder
+import com.bee.chorus.playback.SleepTimer
 import java.util.Locale
 
 /**
@@ -54,6 +56,7 @@ class PlayerPanel @JvmOverloads constructor(
     private val seekBar: SeekBar
     private val elapsedView: TextView
     private val totalView: TextView
+    private val sleepButton: TextView
     private val prevButton: TextView
     private val rewindButton: TextView
     private val playPauseButton: TextView
@@ -96,6 +99,9 @@ class PlayerPanel @JvmOverloads constructor(
         lastPlayer?.let { renderStar(it) }
     }
 
+    // The sleep timer ticks once a second while armed; this redraws only its label.
+    private val sleepListener: (SleepTimer) -> Unit = { renderSleep() }
+
     init {
         LayoutInflater.from(context).inflate(R.layout.view_player, this, true)
 
@@ -109,6 +115,7 @@ class PlayerPanel @JvmOverloads constructor(
         seekBar = findViewById(R.id.player_seek)
         elapsedView = findViewById(R.id.player_elapsed)
         totalView = findViewById(R.id.player_total)
+        sleepButton = findViewById(R.id.player_sleep)
         prevButton = findViewById(R.id.player_prev)
         rewindButton = findViewById(R.id.player_rewind)
         playPauseButton = findViewById(R.id.player_play_pause)
@@ -135,6 +142,8 @@ class PlayerPanel @JvmOverloads constructor(
         attached = true
         PlayerHolder.addPlayerListener(playerListener)
         Favourites.addListener(favouritesListener)
+        SleepTimer.addListener(sleepListener)
+        renderSleep()   // pick up a timer armed before this screen existed
         if (lastPlayer?.isPlaying == true) scheduleTick()
     }
 
@@ -144,6 +153,7 @@ class PlayerPanel @JvmOverloads constructor(
             attached = false
             PlayerHolder.removePlayerListener(playerListener)
             Favourites.removeListener(favouritesListener)
+            SleepTimer.removeListener(sleepListener)
         }
         stopTick()
     }
@@ -477,6 +487,65 @@ class PlayerPanel @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Sleep-timer label between the elapsed and total times: a bare clock glyph when
+     * off, the live countdown (or "End of track") in the accent colour when armed.
+     * Called once in [show] and then once per SleepTimer tick/change via [sleepListener].
+     */
+    private fun renderSleep() {
+        when (SleepTimer.mode()) {
+            SleepTimer.Mode.OFF -> {
+                sleepButton.text = GLYPH_SLEEP
+                sleepButton.setTextColor(MUTED_TEXT)
+                sleepButton.contentDescription = "Sleep timer off, tap to set"
+            }
+            SleepTimer.Mode.COUNTDOWN -> {
+                sleepButton.text = GLYPH_SLEEP + " " + formatTime(SleepTimer.remainingMs())
+                sleepButton.setTextColor(ACCENT_TEXT)
+                sleepButton.contentDescription = "Sleep timer running, tap to change or cancel"
+            }
+            SleepTimer.Mode.END_OF_TRACK -> {
+                sleepButton.text = END_OF_TRACK_LABEL
+                sleepButton.setTextColor(ACCENT_TEXT)
+                sleepButton.contentDescription = "Sleeping at end of track, tap to change or cancel"
+            }
+        }
+    }
+
+    /** Options sheet: cancel when running, then the four timed presets and end-of-track. */
+    private fun sleepDialog() {
+        val running = SleepTimer.mode() != SleepTimer.Mode.OFF
+        val options = ArrayList<String>(6)
+        if (running) options.add("Cancel sleep timer")
+        options.add("15 minutes")
+        options.add("30 minutes")
+        options.add("45 minutes")
+        options.add("60 minutes")
+        options.add("End of track")
+
+        val title = if (SleepTimer.mode() == SleepTimer.Mode.COUNTDOWN) {
+            "Sleep timer — ${formatTime(SleepTimer.remainingMs())} left"
+        } else {
+            "Sleep timer"
+        }
+
+        AlertDialog.Builder(context)
+            .setTitle(title)
+            .setItems(options.toTypedArray()) { _, which ->
+                val picked = if (running) which - 1 else which
+                when (picked) {
+                    -1 -> SleepTimer.cancel()
+                    0 -> SleepTimer.startCountdown(15)
+                    1 -> SleepTimer.startCountdown(30)
+                    2 -> SleepTimer.startCountdown(45)
+                    3 -> SleepTimer.startCountdown(60)
+                    4 -> SleepTimer.startEndOfTrack()
+                }
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
     // ---------------------------------------------------------------- wiring
 
     private fun wireSeekBar() {
@@ -546,6 +615,8 @@ class PlayerPanel @JvmOverloads constructor(
             val id = lastStarId ?: return@setOnClickListener
             Favourites.toggle(id)
         }
+
+        sleepButton.setOnClickListener { sleepDialog() }
     }
 
     // ---------------------------------------------------------------- ticker
@@ -607,6 +678,8 @@ class PlayerPanel @JvmOverloads constructor(
         const val GLYPH_REPEAT_ONE = "🔂"
         const val GLYPH_STAR_ON = "★"
         const val GLYPH_STAR_OFF = "☆"
+        const val GLYPH_SLEEP = "⏱"
+        const val END_OF_TRACK_LABEL = "End of track"
 
         // One accent, reused for the seek fill and the active mode pills, so the screen reads
         // as a single system rather than a bag of colours.
