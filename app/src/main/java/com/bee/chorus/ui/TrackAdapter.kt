@@ -1,11 +1,16 @@
 package com.bee.chorus.ui
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.R
 import com.bee.chorus.data.Favourites
@@ -34,8 +39,8 @@ class TrackAdapter(
     /**
      * MediaStore id of the track the shared player currently holds, or null when nothing is
      * loaded. The host pushes it down (MainActivity reads the one PlayerHolder controller);
-     * a matching row then gets the now-playing cue — an accent bar on its leading edge and
-     * an accent title.
+     * a matching row then gets the now-playing cue — an accent bar on its leading edge over
+     * a faintly tinted row.
      *
      * Pushed rather than observed, for the same reason as [observeFavourites]: a listener
      * registered from inside the adapter would need a host-lifecycle pairing this class
@@ -122,19 +127,25 @@ class TrackAdapter(
 
         /** Off-star tint, resolved once per recycled holder, not per bind. */
         private val starOffColor =
-            Ui.themeColor(view.context, android.R.attr.textColorSecondary, 0x99FFFFFF.toInt())
+            themeColor(view.context, android.R.attr.textColorSecondary, 0x99FFFFFF.toInt())
 
-        /** The two title colours, likewise resolved once — a bind only picks between them. */
-        private val titleIdleColor =
-            Ui.themeColor(view.context, android.R.attr.textColorPrimary, 0xFFFFFFFF.toInt())
-        private val titleCueColor = Ui.accent(view.context)
+        /** The row's two press/tint backgrounds, built once — a bind just swaps them. */
+        private val rowIdle = Ui.rowBackground(view.context, cue = false)
+        private val rowPlaying = Ui.rowBackground(view.context, cue = true)
+
+        /** Whether the row was drawn as the playing one, so a rebind does not re-set it. */
+        private var showingCue = false
 
         init {
             // Why in code, not a drawable resource: the row owns its own corner radius,
             // and a GradientDrawable is both the tinted placeholder and the outline
             // source that lets clipToOutline round the bitmap Art hands us.
-            art.background = Ui.roundedSurface(view.context, ART_CORNER_DP)
+            art.background = roundedSurface(view.context, ART_CORNER_DP)
             art.clipToOutline = true
+
+            // Cue colours are read off the theme here rather than in the layout: a @color
+            // resolves by configuration, not by theme, so it would ignore cycle mode.
+            cue.background = Ui.accentBar(view.context)
 
             // Set once: the handler resolves its own position at click time, so it never
             // needs re-binding and costs no allocation per bind.
@@ -163,11 +174,17 @@ class TrackAdapter(
         fun bind(t: Track) {
             title.text = t.title.ifBlank { UNKNOWN_TITLE }
 
-            // Now-playing cue: accent bar plus accent title. The bar's width is always
-            // reserved by the layout (invisible, not gone) so rows never shift as it moves.
+            // Now-playing cue: an accent bar down the leading edge over a faintly tinted
+            // row. Both are fills — the accent is never used as text, which would be
+            // unreadable on a light page. The bar's width is always reserved by the layout
+            // (invisible, not gone) so rows never shift as the cue moves, and the tint
+            // swaps between two prebuilt backgrounds rather than redrawing a drawable.
             val playing = t.id == currentTrackId
             cue.visibility = if (playing) View.VISIBLE else View.INVISIBLE
-            title.setTextColor(if (playing) titleCueColor else titleIdleColor)
+            if (playing != showingCue) {
+                showingCue = playing
+                itemView.background = if (playing) rowPlaying else rowIdle
+            }
 
             // MediaStore drops fields it cannot fill in, so build from the parts that
             // actually exist instead of concatenating blindly (which left a leading
@@ -246,5 +263,31 @@ class TrackAdapter(
         }
 
         fun two(value: Int): String = if (value < 10) "0$value" else value.toString()
+
+        /**
+         * Rounded placeholder for artwork: a hair lighter than the dark theme's
+         * background, a hair darker than the light (Cycle) theme's, so rows look
+         * intentional while nothing is decoded yet. Built once per ViewHolder.
+         */
+        fun roundedSurface(ctx: Context, cornerDp: Float): GradientDrawable {
+            val base = themeColor(ctx, android.R.attr.colorBackground, Color.BLACK)
+            val fill = if (ColorUtils.calculateLuminance(base) > 0.5f) {
+                ColorUtils.blendARGB(base, Color.BLACK, 0.08f)
+            } else {
+                ColorUtils.blendARGB(base, Color.WHITE, 0.10f)
+            }
+            return GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = cornerDp * ctx.resources.displayMetrics.density
+                setColor(fill)
+            }
+        }
+
+        fun themeColor(ctx: Context, attr: Int, fallback: Int): Int {
+            val out = TypedValue()
+            val resolved = ctx.theme.resolveAttribute(attr, out, true) &&
+                out.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT
+            return if (resolved) out.data else fallback
+        }
     }
 }

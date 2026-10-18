@@ -1,10 +1,15 @@
 package com.bee.chorus.ui
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.core.graphics.ColorUtils
 import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.R
 
@@ -46,7 +51,7 @@ class PlaylistAdapter(
             // text glyph, so a programmatic shape keeps the APK free of another asset
             // and costs one tiny drawable per recycled holder — never on the bind path.
             val badge: TextView = view.findViewById(R.id.glyph)
-            badge.background = Ui.ovalSurface(view.context, BADGE_BLEND)
+            badge.background = badgeFill(view.context)
 
             // Set once: resolves its own position at click time, so no re-binding and
             // no allocation per bind. getOrNull (as the long-press handler below) rather
@@ -83,7 +88,25 @@ class PlaylistAdapter(
         const val VIEW_TYPE = 3
         const val UNNAMED = "Untitled playlist"
 
-        /** The circular badge sits a touch further off the background than art placeholders. */
-        const val BADGE_BLEND = 0.12f
+        /** Circular badge fill: a hair off the window background in either theme. */
+        fun badgeFill(ctx: Context): GradientDrawable {
+            val base = themeColor(ctx, android.R.attr.colorBackground, Color.BLACK)
+            val fill = if (ColorUtils.calculateLuminance(base) > 0.5f) {
+                ColorUtils.blendARGB(base, Color.BLACK, 0.08f)
+            } else {
+                ColorUtils.blendARGB(base, Color.WHITE, 0.12f)
+            }
+            return GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(fill)
+            }
+        }
+
+        fun themeColor(ctx: Context, attr: Int, fallback: Int): Int {
+            val out = TypedValue()
+            val resolved = ctx.theme.resolveAttribute(attr, out, true) &&
+                out.type in TypedValue.TYPE_FIRST_COLOR_INT..TypedValue.TYPE_LAST_COLOR_INT
+            return if (resolved) out.data else fallback
+        }
     }
 }

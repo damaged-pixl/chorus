@@ -507,6 +507,11 @@ class MainActivity : AppCompatActivity() {
         tabButtons = map.keys.associateWith { findViewById(it) }
         tabIndicators = indicators.keys.associateWith { findViewById(indicators.getValue(it)) }
 
+        // Underline colours come from the theme in code, never from a @color drawable: a
+        // colour resource resolves by configuration (day/night), not by theme, so it would
+        // ignore the Cycle theme entirely.
+        for (indicator in tabIndicators.values) indicator.background = Ui.accentBar(this)
+
         for ((tab, target) in map) {
             val button = tabButtons.getValue(tab)
             // The pill and the label colour come from the button's own selected state, so a

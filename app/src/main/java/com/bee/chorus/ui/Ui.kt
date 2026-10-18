@@ -3,12 +3,12 @@ package com.bee.chorus.ui
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.util.TypedValue
-import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import com.bee.chorus.R
 
@@ -19,13 +19,19 @@ import com.bee.chorus.R
  * pill, a ripple, a disc or a surface is a [GradientDrawable]/[RippleDrawable] built here —
  * once per view or once per recycled ViewHolder, never on a bind path.
  *
- * Colours resolve from theme attributes first (so both the dark theme and Cycle's light one
- * are followed automatically) and fall back to a literal only where no attribute exists.
+ * Colours all come from *theme attributes*, never from a `@color` resource: a colour
+ * resource resolves by configuration (day/night) rather than by theme, so it would hand
+ * back the wrong value the moment the Cycle theme is active on a phone in night mode.
+ * Reading them off the theme means every palette — light, dark and Cycle — is followed
+ * automatically.
  */
 internal object Ui {
 
     /** Tint alpha for the selected tab's pill: a hint of accent, never a solid block. */
     private const val TINT_ALPHA = 0x26
+
+    /** Tint alpha for the now-playing row's background. */
+    private const val ROW_TINT_ALPHA = 0x1F
 
     /** How far a "surface" is pushed away from the window background. */
     private const val DEFAULT_BLEND = 0.10f
@@ -43,10 +49,14 @@ internal object Ui {
     fun dpInt(ctx: Context, value: Int): Int = dp(ctx, value.toFloat()).toInt()
 
     /**
-     * The app's accent, shared by the tab strip and the now-playing cue so they read as the
-     * same system as the amber star and the player's seek fill.
+     * The app's accent, for *fills* — the selected tab's pill, its underline, the
+     * now-playing row. Read from `colorAccent`, which the app theme points at the accent
+     * colour, so it tracks whichever palette is active.
+     *
+     * Not for text: the accent is a fill colour, and in the light palette it is far too
+     * light to read as small type on a near-white page. Labels use text colours instead.
      */
-    fun accent(ctx: Context): Int = ContextCompat.getColor(ctx, R.color.ui_accent)
+    fun accent(ctx: Context): Int = themeColor(ctx, android.R.attr.colorAccent, FALLBACK_ACCENT)
 
     /** Resolve a theme colour attribute, falling back when the theme does not define it. */
     fun themeColor(ctx: Context, attr: Int, fallback: Int): Int {
@@ -90,12 +100,25 @@ internal object Ui {
             setColor(surfaceFill(ctx, blend))
         }
 
-    /** Circular [surfaceFill] — the playlist row's badge. */
-    fun ovalSurface(ctx: Context, blend: Float = DEFAULT_BLEND): GradientDrawable =
-        GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(surfaceFill(ctx, blend))
-        }
+    /**
+     * A ripple over a flat fill: the press feedback for a list row. With [cue] set the fill
+     * is a faint accent tint, which is how the now-playing row is marked — two of these are
+     * built once per recycled holder and swapped on bind, which is cheaper than mutating a
+     * drawable and avoids a relayout on every state change.
+     */
+    fun rowBackground(ctx: Context, cue: Boolean): Drawable = RippleDrawable(
+        rippleTint(ctx),
+        ColorDrawable(
+            if (cue) ColorUtils.setAlphaComponent(accent(ctx), ROW_TINT_ALPHA) else Color.TRANSPARENT
+        ),
+        null
+    )
+
+    /** A solid accent bar, for the now-playing cue down a row's leading edge. */
+    fun accentBar(ctx: Context): GradientDrawable = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        setColor(accent(ctx))
+    }
 
     /**
      * A ripple over a filled disc, for the mini player's play/pause target. The mask is a
@@ -103,7 +126,10 @@ internal object Ui {
      */
     fun circularTapTarget(ctx: Context): Drawable = RippleDrawable(
         rippleTint(ctx),
-        ovalSurface(ctx, 0.07f),
+        GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(surfaceFill(ctx, 0.07f))
+        },
         GradientDrawable().apply { shape = GradientDrawable.OVAL }
     )
 
@@ -126,7 +152,7 @@ internal object Ui {
     }
 
     /**
-     * Background for a always-visible toggle (Shuffle, Repeat): the same pill as the tab
+     * Background for an always-visible toggle (Shuffle, Repeat): the same pill as the tab
      * strip but keyed on the selected state, so turning it on is visible at a glance.
      */
     fun toggleBackground(ctx: Context): Drawable = tabBackground(ctx)
@@ -138,12 +164,22 @@ internal object Ui {
             if (fill != Color.TRANSPARENT) setColor(fill)
         }
 
-    /** Tab label colours: accent while selected, secondary otherwise. */
+    /**
+     * Tab label colours: full-strength primary text when selected, secondary otherwise. The
+     * pill and the underline carry the accent — the accent colour is too light to use as
+     * small type on a light page, so the label never takes it.
+     */
     fun tabTextColors(ctx: Context): ColorStateList = ColorStateList(
         arrayOf(intArrayOf(android.R.attr.state_selected), intArrayOf()),
         intArrayOf(
-            accent(ctx),
+            themeColor(ctx, android.R.attr.textColorPrimary, Color.WHITE),
             themeColor(ctx, android.R.attr.textColorSecondary, 0x99FFFFFF.toInt())
         )
     )
+
+    /**
+     * Only ever seen by a build that has no app theme mapped onto `colorAccent`; the real
+     * value always comes from the theme.
+     */
+    private const val FALLBACK_ACCENT = 0xFFFFC107.toInt()
 }

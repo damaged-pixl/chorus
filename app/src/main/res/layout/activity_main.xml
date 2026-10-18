@@ -48,7 +48,6 @@
                 android:layout_height="2dp"
                 android:layout_gravity="bottom|center_horizontal"
                 android:layout_marginBottom="6dp"
-                android:background="@drawable/ui_accent_bar"
                 android:importantForAccessibility="no"
                 android:visibility="gone" />
         </FrameLayout>
@@ -79,7 +78,6 @@
                 android:layout_height="2dp"
                 android:layout_gravity="bottom|center_horizontal"
                 android:layout_marginBottom="6dp"
-                android:background="@drawable/ui_accent_bar"
                 android:importantForAccessibility="no"
                 android:visibility="gone" />
         </FrameLayout>
@@ -110,7 +108,6 @@
                 android:layout_height="2dp"
                 android:layout_gravity="bottom|center_horizontal"
                 android:layout_marginBottom="6dp"
-                android:background="@drawable/ui_accent_bar"
                 android:importantForAccessibility="no"
                 android:visibility="gone" />
         </FrameLayout>
@@ -141,7 +138,6 @@
                 android:layout_height="2dp"
                 android:layout_gravity="bottom|center_horizontal"
                 android:layout_marginBottom="6dp"
-                android:background="@drawable/ui_accent_bar"
                 android:importantForAccessibility="no"
                 android:visibility="gone" />
         </FrameLayout>
@@ -172,7 +168,6 @@
                 android:layout_height="2dp"
                 android:layout_gravity="bottom|center_horizontal"
                 android:layout_marginBottom="6dp"
-                android:background="@drawable/ui_accent_bar"
                 android:importantForAccessibility="no"
                 android:visibility="gone" />
         </FrameLayout>
@@ -203,7 +198,6 @@
                 android:layout_height="2dp"
                 android:layout_gravity="bottom|center_horizontal"
                 android:layout_marginBottom="6dp"
-                android:background="@drawable/ui_accent_bar"
                 android:importantForAccessibility="no"
                 android:visibility="gone" />
         </FrameLayout>

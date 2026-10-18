@@ -24,13 +24,13 @@
     android:paddingBottom="8dp">
 
     <!-- Now-playing cue. INVISIBLE rather than gone while idle so its width is reserved:
-         rows then never shift as the cue moves from one track to the next. -->
+         rows then never shift as the cue moves from one track to the next. Its colour
+         comes from the theme in TrackAdapter, never from a @color drawable. -->
     <View
         android:id="@+id/now_playing_bar"
         android:layout_width="3dp"
         android:layout_height="26dp"
         android:layout_marginEnd="11dp"
-        android:background="@drawable/ui_accent_bar"
         android:importantForAccessibility="no"
         android:visibility="invisible" />
 
