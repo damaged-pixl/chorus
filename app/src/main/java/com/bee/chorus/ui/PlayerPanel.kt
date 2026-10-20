@@ -67,6 +67,7 @@ class PlayerPanel @JvmOverloads constructor(
     private val previewView: TextView
     private val elapsedView: TextView
     private val totalView: TextView
+    private val speedButton: TextView
     private val lyricsButton: TextView
     private val lyricsPanel: LyricsPanel
     private val sleepButton: TextView
@@ -97,6 +98,7 @@ class PlayerPanel @JvmOverloads constructor(
     private val sleepOnBg: Drawable
     private val lyricsIdleBg: Drawable
     private val lyricsOnBg: Drawable
+    private val speedIdleBg: Drawable
 
     // Design tokens, resolved once per inflation. A theme change always arrives as an
     // Activity recreation (system uiMode, or recreate() from the Setup-tab cycle toggle), so
@@ -152,6 +154,7 @@ class PlayerPanel @JvmOverloads constructor(
         previewView = findViewById(R.id.player_seek_preview)
         elapsedView = findViewById(R.id.player_elapsed)
         totalView = findViewById(R.id.player_total)
+        speedButton = findViewById(R.id.player_speed)
         lyricsButton = findViewById(R.id.player_lyrics_toggle)
         lyricsPanel = findViewById(R.id.player_lyrics)
         sleepButton = findViewById(R.id.player_sleep)
@@ -185,6 +188,7 @@ class PlayerPanel @JvmOverloads constructor(
         sleepOnBg = pill(pillOn, 0)
         lyricsIdleBg = pill(pillIdle, pillBorder)
         lyricsOnBg = pill(pillOn, 0)
+        speedIdleBg = pill(pillIdle, pillBorder)
 
         styleBackdrop()
         styleArtCard()
@@ -195,6 +199,8 @@ class PlayerPanel @JvmOverloads constructor(
         wireButtons()
         setMarquee(titleView)
         renderLyricsToggle()
+        renderSpeed(PlayerHolder.speed())
+        speedButton.background = speedIdleBg
     }
 
     // ---------------------------------------------------------------- public
@@ -482,6 +488,10 @@ class PlayerPanel @JvmOverloads constructor(
     private fun render(player: Player) {
         lastPlayer = player
 
+        // Playback parameters changed events land here too, so the pill follows a
+        // notification/lock-screen speed change without any extra listener.
+        renderSpeed(player.playbackParameters.speed)
+
         val metadata = player.currentMediaItem?.mediaMetadata
 
         val title = metadata?.title?.toString().orEmpty()
@@ -683,6 +693,45 @@ class PlayerPanel @JvmOverloads constructor(
         }
     }
 
+    // ---------------------------------------------------------------- speed
+
+    /**
+     * The fixed step list. Deliberately a short, common set rather than free-wheeling
+     * adjustment: spoken-word nudges (1.25×/1.5×) and slow-down (0.75×) cover what people
+     * actually reach for, and every step is one tap away from the last.
+     */
+    private val speeds = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+
+    /** "1×", "1.25×" — whole numbers without a pointless ".0". */
+    private fun speedLabel(v: Float): String =
+        (if (v % 1f == 0f) v.toInt().toString() else v.toString()) + "×"
+
+    /**
+     * Paint the speed pill from [speed]: muted at 1× (the unremarkable default), accent
+     * otherwise, so a non-standard speed is visible at a glance. Idempotent — render()
+     * runs on every player event.
+     */
+    private fun renderSpeed(speed: Float) {
+        val label = speedLabel(speed)
+        if (speedButton.text != label) speedButton.text = label
+        speedButton.setTextColor(if (speed == 1f) mutedText else accent)
+        speedButton.contentDescription =
+            "Playback speed, ${label.removeSuffix("×")} times, tap to change"
+    }
+
+    /**
+     * Tap: step *up* to the next speed and wrap to 0.5× after 2×. Stepping up rather than
+     * through keeps the common moves (1 → 1.25 → 1.5) short, and a stored value outside
+     * the list (a future edit) lands on the next step above it instead of being lost.
+     */
+    private fun cycleSpeed() {
+        val current = PlayerHolder.speed()
+        val idx = speeds.indexOfFirst { it > current + 0.001f }
+        val next = if (idx >= 0) speeds[idx] else speeds[0]
+        PlayerHolder.setSpeed(next)
+        renderSpeed(next)
+    }
+
     // ---------------------------------------------------------------- lyrics
 
     /**
@@ -844,6 +893,7 @@ class PlayerPanel @JvmOverloads constructor(
         }
 
         shuffleButton.setOnClickListener { PlayerHolder.toggleShuffle() }
+        speedButton.setOnClickListener { cycleSpeed() }
 
         repeatButton.setOnClickListener { PlayerHolder.cycleRepeat() }
 

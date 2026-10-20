@@ -27,11 +27,11 @@ object Settings {
     private const val KEY_SPEED = "playback_speed"
     private const val DEFAULT_SPEED = 1f
 
-    // Sleep-timer restore state. The mode is a SleepTimer.Mode ordinal (0 = off,
-    // 1 = countdown, 2 = end of track) and end_at is a wall-clock epoch-ms — the only
-    // clock that still means something after the process has been killed.
-    private const val KEY_SLEEP_MODE = "sleep_mode"
-    private const val KEY_SLEEP_END_AT = "sleep_end_at"
+    // Sleep-timer restore state: a wall-clock epoch-ms deadline (the only clock that
+    // still means something after the process has been killed) or the end-of-track
+    // flag, written as one atomic pair so a reader never sees a half-updated timer.
+    private const val KEY_SLEEP_DEADLINE = "sleep_deadline_ms"
+    private const val KEY_SLEEP_END_OF_TRACK = "sleep_end_of_track"
 
     private val listeners = CopyOnWriteArrayList<(Boolean) -> Unit>()
 
@@ -67,25 +67,27 @@ object Settings {
 
     // ------------------------------------------------------------------ sleep timer
 
-    /** Persist an armed sleep timer: the SleepTimer mode ordinal + countdown end epoch-ms. */
-    fun saveSleep(ctx: Context, modeOrdinal: Int, endAtMs: Long) {
+    /**
+     * Wall-clock epoch-ms at which the sleep timer should pause playback, or 0 when no
+     * countdown is armed. Wall-clock rather than `elapsedRealtime` because the value has
+     * to mean something after process death (and, in principle, a reboot).
+     */
+    fun sleepDeadline(ctx: Context): Long = prefs(ctx).getLong(KEY_SLEEP_DEADLINE, 0L)
+
+    /** True when the armed sleep timer is waiting for the current track to end. */
+    fun sleepEndOfTrack(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_SLEEP_END_OF_TRACK, false)
+
+    /**
+     * Store the armed timer as one atomic pair: either a countdown deadline (with
+     * `endOfTrack` false) or the end-of-track flag (with `deadlineMs` 0). Passing
+     * 0/false clears it. One editor write, so a reader never sees a half-updated pair.
+     */
+    fun setSleepTimer(ctx: Context, deadlineMs: Long, endOfTrack: Boolean) {
         prefs(ctx).edit()
-            .putInt(KEY_SLEEP_MODE, modeOrdinal)
-            .putLong(KEY_SLEEP_END_AT, endAtMs)
+            .putLong(KEY_SLEEP_DEADLINE, deadlineMs)
+            .putBoolean(KEY_SLEEP_END_OF_TRACK, endOfTrack)
             .apply()
-    }
-
-    /** Saved mode ordinal; 0 (off) when nothing is or was armed. */
-    fun sleepMode(ctx: Context): Int =
-        prefs(ctx).getInt(KEY_SLEEP_MODE, 0)
-
-    /** Saved countdown end on the wall clock, 0 unless the saved mode is a countdown. */
-    fun sleepEndAt(ctx: Context): Long =
-        prefs(ctx).getLong(KEY_SLEEP_END_AT, 0L)
-
-    /** Drop the saved timer (fired, cancelled, or expired while the process was dead). */
-    fun clearSleep(ctx: Context) {
-        prefs(ctx).edit().remove(KEY_SLEEP_MODE).remove(KEY_SLEEP_END_AT).apply()
     }
 
     // ------------------------------------------------------------------ listeners

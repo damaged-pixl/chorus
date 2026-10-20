@@ -6,9 +6,11 @@ import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.bee.chorus.data.Settings
 import com.bee.chorus.data.Track
 import java.util.concurrent.Executor
 
@@ -28,6 +30,9 @@ object PlayerHolder {
     @Volatile private var controller: MediaController? = null
     private var binding = false
     private var retries = 0
+
+    /** App context for persistence (speed); set once in [bind]. */
+    @Volatile private var appCtx: Context? = null
 
     private val playerListeners = mutableListOf<(Player) -> Unit>()
     private val readyActions = mutableListOf<(MediaController) -> Unit>()
@@ -51,6 +56,7 @@ object PlayerHolder {
         binding = true
 
         val app = context.applicationContext
+        appCtx = app
         val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
         val future = MediaController.Builder(app, token).buildAsync()
 
@@ -107,22 +113,7 @@ object PlayerHolder {
     fun play(tracks: List<Track>, startIndex: Int = 0) {
         if (tracks.isEmpty()) return
         whenReady { c ->
-            val items = tracks.map { track ->
-                MediaItem.Builder()
-                    .setMediaId(track.id.toString())
-                    .setUri(track.uri)
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(track.title)
-                            .setArtist(track.artist)
-                            .setAlbumTitle(track.album)
-                            .setArtworkUri(track.albumArtUri)
-                            .setIsBrowsable(false)
-                            .setIsPlayable(true)
-                            .build()
-                    )
-                    .build()
-            }
+            val items = tracks.map { it.asMediaItem() }
             c.setMediaItems(items, startIndex.coerceIn(0, items.size - 1), 0L)
             c.prepare()
             c.play()
@@ -142,4 +133,38 @@ object PlayerHolder {
             }
         }
     }
+
+    /**
+     * Set playback speed, live and persisted. The write is two-way: the controller
+     * (mirrored to the service's player) takes it immediately, and [Settings] keeps it so
+     * the next process starts at the same speed — PlaybackService.onCreate re-applies it.
+     */
+    fun setSpeed(value: Float) {
+        appCtx?.let { Settings.setSpeed(it, value) }
+        controller?.playbackParameters = PlaybackParameters(value)
+    }
+
+    /** The player's current speed; 1f before the controller exists. */
+    fun speed(): Float = controller?.playbackParameters?.speed ?: 1f
 }
+
+/**
+ * One queue item for [this] track. Shared by [PlayerHolder.play] and PlaybackService's
+ * restore, so a restored queue carries the same mediaId, content URI and metadata as a
+ * freshly built one (the notification and the queue panel read those).
+ */
+internal fun Track.asMediaItem(): MediaItem =
+    MediaItem.Builder()
+        .setMediaId(id.toString())
+        .setUri(uri)
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(title)
+                .setArtist(artist)
+                .setAlbumTitle(album)
+                .setArtworkUri(albumArtUri)
+                .setIsBrowsable(false)
+                .setIsPlayable(true)
+                .build()
+        )
+        .build()

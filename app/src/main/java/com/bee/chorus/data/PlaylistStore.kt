@@ -10,15 +10,15 @@ import android.database.sqlite.SQLiteOpenHelper
  * Tracks are referenced by their stable MediaStore id, so nothing is copied.
  *
  * Also holds the app's small writable state (`favourites` from schema v2,
- * `play_stats` from v3, and `playlist_origin` from v5 — where an imported playlist
- * came from, so re-importing an updated .m3u updates it instead of duplicating it).
- * Note that several instances of this helper may exist at
+ * `play_stats` from v3, the saved queue from v4, and `playlist_origin` from v5 — where an
+ * imported playlist came from, so re-importing an updated .m3u updates it instead of
+ * duplicating it). Note that several instances of this helper may exist at
  * once (MainActivity owns one, the [Favourites] facade and PlaybackService each open
  * their own with the application context) — Android's SQLiteDatabase pools connections
  * per file path, so that is safe.
  */
 class PlaylistStore(context: Context) :
-    SQLiteOpenHelper(context, Library.PLAYLIST_DB, null, 5) {
+    SQLiteOpenHelper(context, Library.PLAYLIST_DB, null, 6) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -47,17 +47,34 @@ class PlaylistStore(context: Context) :
                 playlist_id INTEGER PRIMARY KEY,
                 source TEXT NOT NULL)"""
         )
+        db.execSQL(
+            """CREATE TABLE queue(
+                position INTEGER PRIMARY KEY,
+                media_id INTEGER NOT NULL)"""
+        )
+        db.execSQL(
+            """CREATE TABLE queue_state(
+                _id INTEGER PRIMARY KEY CHECK(_id = 0),
+                current_index INTEGER NOT NULL,
+                position_ms INTEGER NOT NULL,
+                shuffle INTEGER NOT NULL,
+                repeat_mode INTEGER NOT NULL)"""
+        )
     }
 
     /**
      * Real migrations, one per schema bump:
      *  v1 -> v2 added the `favourites` table.
      *  v2 -> v3 added the `play_stats` table.
-     *  v3 -> v4 adds the `queue` table (Phase D — lands on merge; empty here so this
-     *       branch's migrations stay self-contained).
+     *  v3 -> v4 added the queue tables (`queue` + `queue_state`).
      *  v4 -> v5 added the `playlist_origin` table (Phase E).
+     *  v5 -> v6 re-creates the queue tables. Needed because the v5 build shipped with an
+     *       empty v3→v4 branch (queue was still in development), so a phone that already
+     *       upgraded to v5 would never run the v4 branch — an already-shipped migration
+     *       must never be edited, the fix is always a new branch. `IF NOT EXISTS` makes
+     *       every starting version converge on the same schema.
      * An oldVersion of 1 falls through every branch, so every historical version
-     * reaches the current schema.
+     * reaches the current schema. Add the next bump as a new `if (old < N)` branch.
      */
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
         if (old < 2) db.execSQL("CREATE TABLE IF NOT EXISTS favourites(track_id INTEGER PRIMARY KEY)")
@@ -70,14 +87,42 @@ class PlaylistStore(context: Context) :
             )
         }
         if (old < 4) {
-            // Reserved for Phase D's `queue` table, which is being added on a parallel
-            // branch — deliberately empty here. Merge the real branch to fill it in.
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS queue(
+                    position INTEGER PRIMARY KEY,
+                    media_id INTEGER NOT NULL)"""
+            )
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS queue_state(
+                    _id INTEGER PRIMARY KEY CHECK(_id = 0),
+                    current_index INTEGER NOT NULL,
+                    position_ms INTEGER NOT NULL,
+                    shuffle INTEGER NOT NULL,
+                    repeat_mode INTEGER NOT NULL)"""
+            )
         }
         if (old < 5) {
             db.execSQL(
                 """CREATE TABLE IF NOT EXISTS playlist_origin(
                     playlist_id INTEGER PRIMARY KEY,
                     source TEXT NOT NULL)"""
+            )
+        }
+        if (old < 6) {
+            // Catch-up for installs that reached v5 while the queue tables were still
+            // gated behind the (then empty) v4 branch. See the KDoc above.
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS queue(
+                    position INTEGER PRIMARY KEY,
+                    media_id INTEGER NOT NULL)"""
+            )
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS queue_state(
+                    _id INTEGER PRIMARY KEY CHECK(_id = 0),
+                    current_index INTEGER NOT NULL,
+                    position_ms INTEGER NOT NULL,
+                    shuffle INTEGER NOT NULL,
+                    repeat_mode INTEGER NOT NULL)"""
             )
         }
     }
@@ -275,4 +320,84 @@ class PlaylistStore(context: Context) :
 
     /** One track's play statistics. */
     data class PlayStat(val plays: Int, val lastPlayed: Long)
+
+    // ---------------------------------------------------------------- queue (schema v4)
+
+    /**
+     * The queue as last handed to the player: ordered MediaStore ids plus where playback
+     * had got to and the two playback modes. Written by PlaybackService only.
+     *
+     * The ordered ids and the scalar state get two tables rather than one key/value table:
+     * the state is a typed singleton row (`_id` is pinned to 0) so a save is one
+     * INSERT OR REPLACE with no parsing, and the order lives in `position` — a single
+     * ordered read restores it.
+     */
+    data class QueueSnapshot(
+        val mediaIds: List<Long>,
+        val currentIndex: Int,
+        val positionMs: Long,
+        val shuffle: Boolean,
+        val repeatMode: Int
+    )
+
+    /** Replace the saved queue wholesale — it is a snapshot, never edited in place. */
+    fun saveQueue(snapshot: QueueSnapshot) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("queue", null, null)
+            val insert = db.compileStatement("INSERT INTO queue(position, media_id) VALUES(?, ?)")
+            insert.use { st ->
+                snapshot.mediaIds.forEachIndexed { i, id ->
+                    st.clearBindings()
+                    st.bindLong(1, i.toLong())
+                    st.bindLong(2, id)
+                    st.executeInsert()
+                }
+            }
+            val cv = ContentValues().apply {
+                put("_id", 0)
+                put("current_index", snapshot.currentIndex)
+                put("position_ms", snapshot.positionMs)
+                put("shuffle", if (snapshot.shuffle) 1 else 0)
+                put("repeat_mode", snapshot.repeatMode)
+            }
+            db.insertWithOnConflict("queue_state", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /** The saved queue, or null when nothing usable was stored. */
+    fun savedQueue(): QueueSnapshot? {
+        val db = readableDatabase
+        var index = 0
+        var positionMs = 0L
+        var shuffle = false
+        var repeatMode = 0
+        db.query(
+            "queue_state",
+            arrayOf("current_index", "position_ms", "shuffle", "repeat_mode"),
+            null, null, null, null, null
+        ).use { c ->
+            if (!c.moveToFirst()) return null
+            index = c.getInt(0)
+            positionMs = c.getLong(1)
+            shuffle = c.getInt(2) != 0
+            repeatMode = c.getInt(3)
+        }
+        val ids = ArrayList<Long>()
+        db.query("queue", arrayOf("media_id"), null, null, null, null, "position ASC")
+            .use { c -> while (c.moveToNext()) ids.add(c.getLong(0)) }
+        if (ids.isEmpty()) return null
+        return QueueSnapshot(ids, index.coerceIn(0, ids.size - 1), positionMs, shuffle, repeatMode)
+    }
+
+    /** Forget the saved queue (the player's queue was emptied). */
+    fun clearQueue() {
+        val db = writableDatabase
+        db.delete("queue", null, null)
+        db.delete("queue_state", null, null)
+    }
 }

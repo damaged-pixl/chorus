@@ -198,10 +198,12 @@
                 android:textSize="13sp" />
         </FrameLayout>
 
-        <!-- elapsed (left) ... total (right). The centre slot the sleep control used to
-             share is now empty, so the two times sit at the extremes and this row stays
-             inside its height budget. There is deliberately no appearance control here:
-             light/dark is the system UI mode, and cycle mode lives on the Setup tab only. -->
+        <!-- elapsed (left) ... total (right), with the speed and lyrics toggles between
+             them. The centre slot the sleep control used to share is now the control slot;
+             there is deliberately no *appearance* control here: light/dark is the system UI
+             mode, and cycle mode lives on the Setup tab only. Speed sits here rather than in
+             the modes row because a fifth mode pill would break cycle mode's 72dp budget
+             ((360 − 48 − 24) / 4 = 72dp exactly for the four existing pills). -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -217,6 +219,24 @@
                 android:gravity="start"
                 android:letterSpacing="0.06"
                 android:text="0:00"
+                android:textColor="?attr/chorusPlayerTextMuted"
+                android:textSize="12sp" />
+
+            <!-- Playback speed. Shows the current multiplier ("1×"); taps cycle the fixed
+                 step list. Accent-coloured only when it differs from 1×, so the default
+                 state reads as "nothing special here". -->
+            <TextView
+                android:id="@+id/player_speed"
+                android:layout_width="48dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:clickable="true"
+                android:contentDescription="Playback speed, 1 times, tap to change"
+                android:focusable="true"
+                android:gravity="center"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="1×"
                 android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="12sp" />
 

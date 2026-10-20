@@ -1,18 +1,25 @@
 package com.bee.chorus.playback
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import com.bee.chorus.data.Settings
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Sleep timer: pause playback after N minutes, or when the current track ends.
  *
- * Pure in-memory state on purpose — it deliberately does not survive process death
- * (no service, no database, no persistence). While armed it owns at most two Handler
- * callbacks, and only ever one *periodic* one:
+ * Runs on the main thread (start/cancel come from UI taps and the player callbacks already
+ * arrive on the main looper) and survives process death: [restore] — called by
+ * PlaybackService.onCreate — re-arms whatever [Settings] holds. A countdown is stored as a
+ * wall-clock epoch-ms deadline; an end-of-track timer as a flag. If the deadline passed
+ * while the process was dead (or is under ~5 s away), [restore] just pauses and clears it
+ * rather than arming a timer that would fire immediately.
+ *
+ * While armed it owns at most two Handler callbacks, and only ever one *periodic* one:
  *  - timed modes: a single [expire] runnable posted for the exact remaining time, plus a
  *    1 Hz [tick] refresh **only while a listener is registered** (i.e. while a screen is
  *    actually showing the countdown). Headless — screen closed, audio playing in the
@@ -23,10 +30,11 @@ import java.util.concurrent.CopyOnWriteArrayList
  * When it fires it pauses through the shared [PlayerHolder] controller, so it works from
  * any screen or with none open.
  *
- * Everything here runs on the main thread: start/cancel come from UI taps and the
- * player callbacks already arrive on the main looper. Listeners are held strongly —
- * [PlayerPanel] adds one in `show()` and removes it in `hide()`. Anyone registering
- * outside that pattern must remove in the Activity's onDestroy.
+ * Persistence is best-effort by design: it is dropped when [restore] has never been called
+ * (no app context), and a dead process cannot fire a timer — the next start pauses instead.
+ *
+ * Listeners are held strongly — [PlayerPanel] adds one in `show()` and removes it in
+ * `hide()`. Anyone registering outside that pattern must remove in the Activity's onDestroy.
  */
 object SleepTimer {
 
@@ -35,6 +43,9 @@ object SleepTimer {
     /** How close to the scheduled fire time a track change is treated as "it just ended". */
     private const val FIRE_TOLERANCE_MS = 1_500L
 
+    /** A deadline this close (or already past) is honoured immediately on restore. */
+    private const val MIN_RESTORE_MS = 5_000L
+
     private val main = Handler(Looper.getMainLooper())
 
     /** Visible countdown refresh period. Only runs while a listener is registered. */
@@ -42,6 +53,9 @@ object SleepTimer {
 
     /** Held strongly; every current registration is paired with a view lifecycle. */
     private val listeners = CopyOnWriteArrayList<(SleepTimer) -> Unit>()
+
+    /** App context for the persisted timer; null until [restore] is called. */
+    private var appCtx: Context? = null
 
     @Volatile private var mode = Mode.OFF
 
@@ -61,6 +75,44 @@ object SleepTimer {
 
     // ---------------------------------------------------------------- public
 
+    /**
+     * Re-arm the timer persisted in [Settings]. Called once per process by
+     * PlaybackService.onCreate.
+     *
+     * No-op when a timer is already armed in memory (the prefs hold the same state), so a
+     * service that is destroyed and recreated cannot stack a second countdown. Playback is
+     * never started by this: the restored queue is paused, so an expired deadline is
+     * already satisfied when the player is idle.
+     */
+    fun restore(context: Context) {
+        appCtx = context.applicationContext
+        if (mode != Mode.OFF) return
+
+        val deadline = Settings.sleepDeadline(context)
+        if (deadline > 0L) {
+            val remaining = deadline - System.currentTimeMillis()
+            if (remaining <= MIN_RESTORE_MS) {
+                // Expired (or about to) while the process was dead: honour it now and
+                // forget it, rather than pausing a track the user has just restarted.
+                PlayerHolder.whenReady { it.pause() }
+                clearPersisted()
+                return
+            }
+            mode = Mode.COUNTDOWN
+            endTimeMs = SystemClock.elapsedRealtime() + remaining
+            main.postDelayed(expire, remaining)
+            if (listeners.isNotEmpty()) ensureTick()
+            notifyListeners()
+            return
+        }
+        if (Settings.sleepEndOfTrack(context)) {
+            mode = Mode.END_OF_TRACK
+            PlayerHolder.addPlayerListener(playerListener)
+            rearmEndOfTrack()
+            notifyListeners()
+        }
+    }
+
     /** Pause playback in [minutes] minutes, replacing any current timer. */
     fun startCountdown(minutes: Int) {
         disarm()
@@ -70,6 +122,8 @@ object SleepTimer {
         main.postDelayed(expire, remainingMs())
         // The 1 Hz refresh only exists to redraw a visible countdown.
         if (listeners.isNotEmpty()) ensureTick()
+        // Wall-clock, so the deadline still means something after process death.
+        persist(System.currentTimeMillis() + remainingMs(), endOfTrack = false)
     }
 
     /** Let the current track finish, then pause. Replaces any current timer. */
@@ -79,6 +133,7 @@ object SleepTimer {
         PlayerHolder.addPlayerListener(playerListener)
         rearmEndOfTrack()
         notifyListeners()
+        persist(0L, endOfTrack = true)
     }
 
     /** Stop the timer without touching playback. No-op when nothing is running. */
@@ -86,6 +141,7 @@ object SleepTimer {
         if (mode == Mode.OFF) return
         disarm()
         mode = Mode.OFF
+        clearPersisted()
         notifyListeners()
     }
 
@@ -126,6 +182,17 @@ object SleepTimer {
     private fun notifyListeners() {
         for (l in listeners) l(this)
     }
+
+    /**
+     * Mirror the armed timer into [Settings] (best-effort: no context yet, no write).
+     * `deadlineMs` is wall-clock, 0 for the end-of-track mode and for "off".
+     */
+    private fun persist(deadlineMs: Long, endOfTrack: Boolean) {
+        val ctx = appCtx ?: return
+        Settings.setSleepTimer(ctx, deadlineMs, endOfTrack)
+    }
+
+    private fun clearPersisted() = persist(0L, endOfTrack = false)
 
     // ---- countdown ----
 
@@ -183,6 +250,7 @@ object SleepTimer {
         PlayerHolder.whenReady { it.pause() }
         disarm()
         mode = Mode.OFF
+        clearPersisted()
         notifyListeners()
     }
 
@@ -199,6 +267,7 @@ object SleepTimer {
             if (p.playbackState == Player.STATE_ENDED) {
                 disarm()
                 mode = Mode.OFF
+                clearPersisted()
                 notifyListeners()
             }
             return@Runnable
@@ -241,6 +310,7 @@ object SleepTimer {
             if (p.playbackState == Player.STATE_ENDED) {
                 disarm()
                 mode = Mode.OFF
+                clearPersisted()
                 notifyListeners()
             }
             return
@@ -257,6 +327,7 @@ object SleepTimer {
         PlayerHolder.whenReady { it.pause() }
         disarm()
         mode = Mode.OFF
+        clearPersisted()
         notifyListeners()
     }
 }

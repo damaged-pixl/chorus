@@ -3,8 +3,50 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Simple note glyph: original artwork, not copied from anywhere. -->
+
+    <!-- Chorus launcher mark.
+         The seek bar rendered as a vinyl record: the player's own most recognisable
+         element, drawn from the app's palette instead of a generic music note.
+         Amber #FFC107 is chorusAccent; the label grey is #2A2A31 (one step off the
+         #101014 launcher background).
+         Adaptive-icon safe zone: a circular mask keeps roughly the inner 66dp of this
+         108dp canvas, so the mark's diameter is 56dp (26..82) — inside the safe zone.
+         The seek track deliberately runs wider than the record (8..100) so it reads as
+         a track the disc rides on, but it is decoration: clipping it costs nothing. -->
+
+    <!-- Soft plate so the mark still reads on a light wallpaper, and separates the
+         record's amber edge from whatever sits behind the icon. -->
     <path
-        android:fillColor="#F2F2F5"
-        android:pathData="M62,30 L62,64.5 A10,7.5 0 1 1 57,57.2 L57,38.5 L45,41.2 L45,68 A10,7.5 0 1 1 40,60.7 L40,30 Z" />
+        android:fillColor="#14FFFFFF"
+        android:pathData="M54,54 m-34,0 a34,34 0 1 1 68,0 a34,34 0 1 1 -68,0" />
+
+    <!-- Seek track: the rail the record rides on, protruding past both edges. -->
+    <path
+        android:strokeColor="#80FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M9,54 L99,54" />
+
+    <!-- Seek thumb, at rest: the record itself. -->
+    <path
+        android:fillColor="#FFFFC107"
+        android:pathData="M54,54 m-28,0 a28,28 0 1 1 56,0 a28,28 0 1 1 -56,0" />
+
+    <!-- One record groove. A single thin ring concentric with the spindle: enough to
+         say "vinyl" without turning the disc into a target at launcher sizes — more
+         rings read as a dartboard once the launcher scales this down. -->
+    <path
+        android:strokeColor="#3A101014"
+        android:strokeWidth="2.25"
+        android:pathData="M54,54 m-18.5,0 a18.5,18.5 0 1 1 37,0 a18.5,18.5 0 1 1 -37,0" />
+
+    <!-- Centre label. -->
+    <path
+        android:fillColor="#FF2A2A31"
+        android:pathData="M54,54 m-10,0 a10,10 0 1 1 20,0 a10,10 0 1 1 -20,0" />
+
+    <!-- Spindle hole, punched to the background so it reads at any size. -->
+    <path
+        android:fillColor="#FF101014"
+        android:pathData="M54,54 m-2.75,0 a2.75,2.75 0 1 1 5.5,0 a2.75,2.75 0 1 1 -5.5,0" />
 </vector>
