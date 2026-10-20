@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen mini player (4x2 by default, resizable down to 2x1).
+
+     RemoteViews only accepts a whitelist of views and no custom drawing, so this is one
+     flat row: art thumbnail, title over artist, prev / play-pause / next. Everything the
+     row shows is set by ChorusWidget from the service's player state; the glyphs and the
+     fixed widget colours follow the players' approach (no image assets).
+
+     Sized for 4x2 and honest about its minimum: at 2x1 the text column collapses and the
+     three transport buttons are what remains, which is still usable. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="8dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="6dp">
+
+    <ImageView
+        android:id="@+id/widget_art"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:contentDescription="Album art"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop" />
+
+    <!-- Tap the text to open the app; the three buttons do not overlap it, so their
+         PendingIntents take precedence where they sit. -->
+    <LinearLayout
+        android:id="@+id/widget_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="6dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text="Chorus"
+            android:textColor="@color/chorus_widget_text"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:textColor="@color/chorus_widget_text_dim"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_prev"
+        android:layout_width="34dp"
+        android:layout_height="44dp"
+        android:contentDescription="Previous track"
+        android:gravity="center"
+        android:text="⏮"
+        android:textColor="@color/chorus_widget_text"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/widget_play"
+        android:layout_width="38dp"
+        android:layout_height="44dp"
+        android:contentDescription="Play or pause"
+        android:gravity="center"
+        android:text="▶"
+        android:textColor="@color/chorus_widget_text"
+        android:textSize="19sp" />
+
+    <TextView
+        android:id="@+id/widget_next"
+        android:layout_width="34dp"
+        android:layout_height="44dp"
+        android:contentDescription="Next track"
+        android:gravity="center"
+        android:text="⏭"
+        android:textColor="@color/chorus_widget_text"
+        android:textSize="16sp" />
+</LinearLayout>

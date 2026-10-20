@@ -79,6 +79,15 @@
                 android:layout_height="match_parent"
                 android:contentDescription="Album art"
                 android:scaleType="centerCrop" />
+
+            <!-- Lyrics sheet: hidden until the user opens it from the toggle in the time
+                 row, then drawn over the artwork square. It is a sibling of the art rather
+                 than a replacement, so closing it costs no re-decode. -->
+            <com.bee.chorus.ui.LyricsPanel
+                android:id="@+id/player_lyrics"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone" />
         </FrameLayout>
 
         <!-- Title block: the track name carries the weight, the artist • album line is the
@@ -210,6 +219,22 @@
                 android:text="0:00"
                 android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="12sp" />
+
+            <!-- Lyrics toggle. A text glyph rather than an icon asset, like every other
+                 control here; "≡" reads as lines of text and needs no variation selector. -->
+            <TextView
+                android:id="@+id/player_lyrics_toggle"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:clickable="true"
+                android:contentDescription="Lyrics hidden, tap to show"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="≡"
+                android:textColor="?attr/chorusPlayerTextMuted"
+                android:textSize="19sp" />
 
             <TextView
                 android:id="@+id/player_total"

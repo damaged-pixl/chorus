@@ -7,6 +7,8 @@ import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.util.LruCache
 import android.widget.ImageView
@@ -61,6 +63,9 @@ object Art {
     /** Keys already known to have no art, so we stop re-hitting the provider for them. */
     private val noArt = HashSet<String>()
 
+    /** Callbacks for [bitmap] land here, so callers get their result on the main thread. */
+    private val main = Handler(Looper.getMainLooper())
+
     /** Load [uri] into [iv] at roughly [targetPx]; cancels via the view's tag.
      *
      *  [lowMem] is for list thumbnails: it decodes as RGB_565 (half the bitmap RAM of
@@ -93,6 +98,35 @@ object Art {
                 if (iv.getTag(R.id.art_tag) != key) return@post
                 if (bmp != null) iv.setImageBitmap(bmp) else iv.setImageResource(R.drawable.art_placeholder)
             }
+        }
+    }
+
+    /**
+     * Bounded decode for callers that are not an [ImageView] — the home-screen widget's
+     * RemoteViews. Same pool, same subsampled decode and same cache as [load]; a cache hit
+     * answers before this returns, otherwise [onResult] arrives on the main thread. The
+     * widget never gets a full-size bitmap, and a missing album art costs one negative
+     * lookup for the rest of the process.
+     */
+    fun bitmap(ctx: Context, uri: Uri, targetPx: Int, onResult: (Bitmap?) -> Unit) {
+        val key = "$uri@$targetPx"
+        cache.get(key)?.let {
+            onResult(it)
+            return
+        }
+        if (synchronized(noArt) { noArt.contains(key) }) {
+            onResult(null)
+            return
+        }
+        val appContext = ctx.applicationContext
+        io.execute {
+            val bmp = decode(appContext, uri, targetPx, false)
+            if (bmp == null) {
+                synchronized(noArt) { noArt.add(key) }
+            } else {
+                cache.put(key, bmp)
+            }
+            main.post { onResult(bmp) }
         }
     }
 

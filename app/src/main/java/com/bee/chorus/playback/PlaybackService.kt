@@ -12,6 +12,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.bee.chorus.PlayerActivity
 import com.bee.chorus.data.PlaylistStore
+import com.bee.chorus.widget.ChorusWidget
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 
@@ -59,6 +60,13 @@ class PlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val id = mediaItem?.mediaId?.toLongOrNull() ?: return
                 statsIo.execute { statsStore.recordPlay(id) }
+            }
+
+            // Home-screen widget. onEvents already covers every state the widget draws
+            // (item, isPlaying, queue position), so this one hook replaces a receiver and
+            // avoids polling; the existing code above is untouched.
+            override fun onEvents(player: Player, events: Player.Events) {
+                ChorusWidget.push(this@PlaybackService, player)
             }
         })
 

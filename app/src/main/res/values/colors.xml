@@ -128,4 +128,15 @@
     <color name="chorus_cycle_text_secondary">#FF1A1A1A</color>
     <color name="chorus_cycle_text_muted">#FF2A2A30</color>
     <color name="chorus_cycle_divider">#33000000</color>
+
+    <!-- ===================== home-screen widget (fixed) ======================
+         A widget is inflated by the launcher, not by one of our Activities, so there is no
+         Chorus theme in scope to resolve ?attr against. These are therefore deliberately
+         fixed values rather than design tokens: a dark card like the media notification,
+         which reads on any wallpaper and in any system UI mode. They are the *only*
+         non-themed colours in the app and must stay widget-only. -->
+    <color name="chorus_widget_bg">#F2101014</color>
+    <color name="chorus_widget_text">#FFFFFFFF</color>
+    <color name="chorus_widget_text_dim">#B8FFFFFF</color>
+    <color name="chorus_widget_divider">#22FFFFFF</color>
 </resources>

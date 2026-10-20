@@ -20,9 +20,9 @@ overview; this file is the quick reference for agents working here.
   LruCache (heap/8), size-based subsampling, and a negative cache for artless albums.
   Keep list binds on the bounded path.
 - **Check the *release* APK size after changes** (1,652,363 bytes is the baseline as of
-  2026-10-20 after Phase E; ~1.6 MB / 1,633,863 before it (2026-10-18, after the
-  DayNight/token work); 1,624,203 before that, itself up from 1,614,627 for the six
-  new features; earlier 1,849,450 via `localeFilters += "en"`
+  2026-10-20 after the Phase E library features; ~1.6 MB / 1,633,863 before it (2026-10-18,
+  after the DayNight/token work); 1,624,203 before that, itself up from 1,614,627 for the
+  six new features; earlier 1,849,450 via `localeFilters += "en"`
   + META-INF licence excludes). Debug builds are ~8.7 MB and meaningless for size.
   A dependency or asset regression shows up here first — this is the primary guard against
   feature creep into the thin stack.
@@ -72,11 +72,16 @@ No test suite — verify by building and running on device.
   `playlists` + `playlist_tracks`, `favourites`, `play_stats`, `playlist_origin`;
   tracks by MediaStore id), `Favourites.kt` (app-wide liked set over
   that DB), `Settings.kt` (SharedPreferences wrapper, one flag: cycle mode).
+- `lyrics/` — `Lyrics` model, `LyricsParser` (LRC + plain text), `Id3Lyrics` (ID3v2.3/2.4
+  USLT/SYLT off the file descriptor), `LyricsLoader` (source order, cache, one daemon
+  thread). Hand-written parsing: no dependency.
 - `playback/` — `PlaybackService.kt` (MediaSessionService; counts plays on media-item
-  transitions), `PlayerHolder.kt`, `SleepTimer.kt` (in-memory countdown / end-of-track).
-- `ui/` — `Art.kt`, adapters, `PlayerPanel.kt`/`MiniPlayer.kt`, Search/Queue/Playlist/
-  `FolderPanel.kt`, `CycleMode.kt`/`CycleToggle.kt`, `Theming.kt` (the only place a token
+  transitions; pushes widget updates), `PlayerHolder.kt`, `SleepTimer.kt` (in-memory
+  countdown / end-of-track).
+- `ui/` — `Art.kt`, adapters, `PlayerPanel.kt`/`MiniPlayer.kt`, `LyricsPanel.kt`, Search/Queue/
+  Playlist/FolderPanel.kt, `CycleMode.kt`/`CycleToggle.kt`, `Theming.kt` (the only place a token
   is read out of a theme, plus the system-bar icon contrast).
+- `widget/` — `ChorusWidget.kt`, the home-screen mini player.
 - `MainActivity.kt` (tabs + mini player; track tab = `track_screen` sort bar + list),
   `PlayerActivity.kt` (full-screen player).
 
@@ -141,6 +146,22 @@ land once the rows exist. `PlayerActivity` registers a `Settings` listener for t
 - `SleepTimer` is deliberately in-memory only (no persistence across process death).
   Its end-of-track mode re-arms one exactly-delayed runnable from every player event —
   read its KDoc before changing the firing logic.
+- **The lyrics sheet rides the player's existing tick.** `PlayerPanel.renderProgress`
+  pushes the position into `LyricsPanel.syncTo`; there is no second timer and no listener
+  of its own to unregister. Only the two lines that changed are re-tinted, and nothing is
+  read from disk while the sheet is closed.
+- **Lyric sidecars are best-effort.** The `.lrc`/`.txt` path comes from MediaStore's DATA
+  column; plain-file reads of non-media files are only granted below API 29, so on newer
+  releases the read is refused and the embedded USLT/SYLT tag (if any) wins. Do not "fix"
+  this with MANAGE_EXTERNAL_STORAGE or a SAF picker — neither belongs in this app.
+- **The widget must never build its own `MediaController`.** Its three buttons are
+  explicit broadcasts back into `ChorusWidget`, which calls `PlayerHolder` — the one
+  controller rule still holds. Updates are pushed from `PlaybackService`'s `onEvents`
+  (never polled; `updatePeriodMillis` is 0), and the art goes through `Art.bitmap`, the
+  same bounded/cached decode as the lists — never a full-size bitmap.
+- **The widget's colours are the one deliberate exception to the token rule.** RemoteViews
+  is inflated by the launcher with no Chorus theme in scope, so `@color/chorus_widget_*`
+  are fixed dark values (like the media notification), not theme attributes.
 - **Kotlin 2.4 removed `kotlinOptions {}`** and AGP 9's built-in Kotlin derives
   `jvmTarget` from `compileOptions.targetCompatibility` (17) automatically. Don't add a
   `kotlin { compilerOptions {} }` block — it's redundant here.
