@@ -9,14 +9,16 @@ import android.database.sqlite.SQLiteOpenHelper
  * Local playlists. Plain SQLite (no Room) to keep the build and runtime light.
  * Tracks are referenced by their stable MediaStore id, so nothing is copied.
  *
- * Also holds the app's small writable state (`favourites` from schema v2 and
- * `play_stats` from v3). Note that several instances of this helper may exist at
+ * Also holds the app's small writable state (`favourites` from schema v2,
+ * `play_stats` from v3, and `playlist_origin` from v5 — where an imported playlist
+ * came from, so re-importing an updated .m3u updates it instead of duplicating it).
+ * Note that several instances of this helper may exist at
  * once (MainActivity owns one, the [Favourites] facade and PlaybackService each open
  * their own with the application context) — Android's SQLiteDatabase pools connections
  * per file path, so that is safe.
  */
 class PlaylistStore(context: Context) :
-    SQLiteOpenHelper(context, Library.PLAYLIST_DB, null, 3) {
+    SQLiteOpenHelper(context, Library.PLAYLIST_DB, null, 5) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -40,13 +42,21 @@ class PlaylistStore(context: Context) :
                 plays INTEGER NOT NULL,
                 last_played INTEGER NOT NULL)"""
         )
+        db.execSQL(
+            """CREATE TABLE playlist_origin(
+                playlist_id INTEGER PRIMARY KEY,
+                source TEXT NOT NULL)"""
+        )
     }
 
     /**
      * Real migrations, one per schema bump:
      *  v1 -> v2 added the `favourites` table.
      *  v2 -> v3 added the `play_stats` table.
-     * An oldVersion of 1 falls through both branches, so every historical version
+     *  v3 -> v4 adds the `queue` table (Phase D — lands on merge; empty here so this
+     *       branch's migrations stay self-contained).
+     *  v4 -> v5 added the `playlist_origin` table (Phase E).
+     * An oldVersion of 1 falls through every branch, so every historical version
      * reaches the current schema.
      */
     override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
@@ -57,6 +67,17 @@ class PlaylistStore(context: Context) :
                     track_id INTEGER PRIMARY KEY,
                     plays INTEGER NOT NULL,
                     last_played INTEGER NOT NULL)"""
+            )
+        }
+        if (old < 4) {
+            // Reserved for Phase D's `queue` table, which is being added on a parallel
+            // branch — deliberately empty here. Merge the real branch to fill it in.
+        }
+        if (old < 5) {
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS playlist_origin(
+                    playlist_id INTEGER PRIMARY KEY,
+                    source TEXT NOT NULL)"""
             )
         }
     }
@@ -78,6 +99,9 @@ class PlaylistStore(context: Context) :
         val db = writableDatabase
         db.delete("playlist_tracks", "playlist_id=?", arrayOf(id.toString()))
         db.delete("playlists", "_id=?", arrayOf(id.toString()))
+        // Drop the origin too: a later re-import of the same file must create a fresh
+        // playlist, not "update" an id that no longer exists.
+        db.delete("playlist_origin", "playlist_id=?", arrayOf(id.toString()))
     }
 
     fun listPlaylists(): List<Pair<Long, String>> {
@@ -141,6 +165,37 @@ class PlaylistStore(context: Context) :
         readableDatabase.rawQuery(
             "SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id=?", arrayOf(playlistId.toString())
         ).use { c -> return if (c.moveToFirst()) c.getInt(0) else 0 }
+    }
+
+    // ------------------------------------------------------- import / export support
+
+    /** Swap a playlist's contents wholesale — used when re-importing an updated .m3u. */
+    fun replaceTracks(playlistId: Long, trackIds: List<Long>) {
+        writableDatabase.delete("playlist_tracks", "playlist_id=?", arrayOf(playlistId.toString()))
+        addTracks(playlistId, trackIds)
+    }
+
+    /**
+     * Record where a playlist came from (currently a SAF document URI from an M3U
+     * import), so the next import of the same file updates it instead of duplicating it.
+     */
+    fun setOrigin(playlistId: Long, source: String) {
+        val cv = ContentValues().apply {
+            put("playlist_id", playlistId)
+            put("source", source)
+        }
+        writableDatabase.insertWithOnConflict(
+            "playlist_origin", null, cv, SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
+    /** Playlist previously imported from [source], or null when there is none. */
+    fun playlistIdByOrigin(source: String): Long? {
+        readableDatabase.query(
+            "playlist_origin", arrayOf("playlist_id"), "source=?",
+            arrayOf(source), null, null, null
+        ).use { c -> if (c.moveToFirst()) return c.getLong(0) }
+        return null
     }
 
     // ---------------------------------------------------------------- favourites

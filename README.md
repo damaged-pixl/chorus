@@ -3,8 +3,8 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.6 MB** (1,633,863 bytes — R8 full mode, English-only locales,
-resource shrinking). No Compose, no Material, no DI
+**Release APK: ~1.65 MB** (1,652,363 bytes after the Phase E library features — R8 full
+mode, English-only locales, resource shrinking). No Compose, no Material, no DI
 framework, no analytics, no crash reporting, no ads, **no INTERNET permission** — the
 app cannot phone home even if it wanted to.
 
@@ -40,7 +40,20 @@ repeat (off / all / one), full-screen player with seek, mini player with a progr
 hairline.
 
 Playlists are fully editable: long-press a track or album row to add it to an existing
-or new playlist, and long-press a saved playlist to rename or delete it.
+or new playlist, and long-press a saved playlist to rename, export, or delete it.
+
+**M3U import and export** — the playlist long-press gets an **Export** action that
+writes a standard `.m3u8` (UTF-8, `#EXTM3U` header, `#EXTINF` duration + title lines)
+to a location you pick with the system file picker. **Import playlist** (Lists tab)
+reads `.m3u`/`.m3u8` the same way — comments, directives, relative and absolute paths —
+matches entries against the library by file path, skips what is not on the phone, and
+reports matched/unmatched counts in one toast. Importing a file you have imported
+before updates that playlist rather than duplicating it.
+
+**Folder browse** — the Folders tab walks music by the folder it lives in: a
+tappable breadcrumb rooted at the common parent of every track, subfolders with track
+counts, and the folder's own tracks underneath as ordinary track rows. The tree is
+derived from the in-memory library on each visit; nothing is cached to disk.
 
 **Favourites** — star any track row or the current track in the full player. The set
 lives in SQLite (`playlists.db`), shows up everywhere at once, and gets a "Favourites"
@@ -103,11 +116,12 @@ Two things that look wrong but are not:
 ## Layout
 
 ```
-data/      Track/Album models, LibraryReader (MediaStore), PlaylistStore (SQLite:
-           playlists, favourites, play_stats), Favourites (app-wide liked set), Settings
+data/      Track/Album models, LibraryReader (MediaStore), M3u (playlist text), PlaylistStore
+           (SQLite: playlists, favourites, play_stats, playlist_origin), Favourites (app-wide
+           liked set), Settings
 playback/  PlaybackService (MediaSessionService + play counting), PlayerHolder (single
            shared controller), SleepTimer
-ui/        Art loader, adapters, PlayerPanel, MiniPlayer, Search/Queue/Playlist panels,
+ui/        Art loader, adapters, PlayerPanel, MiniPlayer, Search/Queue/Playlist/Folder panels,
            CycleMode, Theming (design-token + system-bar resolution)
 MainActivity, PlayerActivity
 ```

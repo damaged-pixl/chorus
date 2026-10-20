@@ -12,6 +12,9 @@ import android.provider.MediaStore
  */
 class LibraryReader(private val context: Context) {
 
+    // DATA is deprecated but still populated; the suppression is only for reading it
+    // (see the projection comment — folder browse and M3U need real file paths).
+    @Suppress("DEPRECATION")
     fun loadTracks(): List<Track> {
         val out = ArrayList<Track>()
         val projection = arrayOf(
@@ -22,9 +25,12 @@ class LibraryReader(private val context: Context) {
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.TRACK,
-            MediaStore.Audio.Media.YEAR
-            // DATA (file path) deliberately not fetched: playback goes through the
-            // content:// URI, and the path was never read anywhere.
+            MediaStore.Audio.Media.YEAR,
+            // DATA (file path). Deprecated since API 29 but still populated by
+            // MediaProvider for every row, and the folder browser plus M3U
+            // import/export need the real location (matching entries by path, writing
+            // them out again). Playback deliberately still uses the content:// URI.
+            MediaStore.Audio.Media.DATA
         )
         // Only real music files, skip podcasts/short clips/ringtones.
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
@@ -36,6 +42,8 @@ class LibraryReader(private val context: Context) {
         return out
     }
 
+    /** Reads DATA alongside the live columns — see the [loadTracks] suppression note. */
+    @Suppress("DEPRECATION")
     private fun readTracks(c: Cursor, out: MutableList<Track>) {
         val idC = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
         val titleC = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -45,6 +53,7 @@ class LibraryReader(private val context: Context) {
         val durC = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
         val trackC = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
         val yearC = c.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
+        val pathC = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
 
         val UNKNOWN_ARTIST = "<unknown>"
 
@@ -70,7 +79,8 @@ class LibraryReader(private val context: Context) {
                     durationMs = duration,
                     // TRACK encodes disc in the thousands (1002 = disc 1, track 2).
                     trackNo = (c.getInt(trackC) % 1000).coerceAtLeast(0),
-                    year = c.getInt(yearC)
+                    year = c.getInt(yearC),
+                    path = c.getString(pathC).orEmpty()
                 )
             )
         }
