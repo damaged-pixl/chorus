@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.65 MB** (1,652,363 bytes after the Phase E library features — R8 full
+**Release APK: ~1.66 MB** (1,664,575 bytes after the Phase E + F merges — R8 full
 mode, English-only locales, resource shrinking). No Compose, no Material, no DI
 framework, no analytics, no crash reporting, no ads, **no INTERNET permission** — the
 app cannot phone home even if it wanted to.
@@ -176,4 +176,7 @@ mini player and the full player can never drift apart.
 
 ## Not done
 
-- No gapless/crossfade or playback speed.
+- No crossfade. **ReplayGain and playback speed were started as "Phase D" and stopped
+  before any code landed** — see the Known gaps section of AGENTS.md for the exact state
+  of the `chorus-d1`/`chorus-d2` worktrees and what remains to wire up (queue and
+  sleep-timer persistence are written but not called).

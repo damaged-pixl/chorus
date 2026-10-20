@@ -19,10 +19,10 @@ overview; this file is the quick reference for agents working here.
 - **Never put full-size bitmaps in lists.** `Art` has one shared 2-thread pool, an
   LruCache (heap/8), size-based subsampling, and a negative cache for artless albums.
   Keep list binds on the bounded path.
-- **Check the *release* APK size after changes** (1,652,363 bytes is the baseline as of
-  2026-10-20 after the Phase E library features; ~1.6 MB / 1,633,863 before it (2026-10-18,
-  after the DayNight/token work); 1,624,203 before that, itself up from 1,614,627 for the
-  six new features; earlier 1,849,450 via `localeFilters += "en"`
+- **Check the *release* APK size after changes** (1,664,575 bytes is the baseline as of
+  2026-10-20 after merging the E and F branches; 1,652,363 after Phase E alone;
+  1,633,863 on 2026-10-18 after the DayNight/token work; 1,614,627 for the six
+  new features; earlier 1,849,450 via `localeFilters += "en"`
   + META-INF licence excludes). Debug builds are ~8.7 MB and meaningless for size.
   A dependency or asset regression shows up here first — this is the primary guard against
   feature creep into the thin stack.
@@ -177,5 +177,25 @@ land once the rows exist. `PlayerActivity` registers a `Settings` listener for t
 
 ## Known gaps (backlog, not bugs)
 
-- No gapless/crossfade or playback speed. The sleep timer does not survive process
-  death (by design).
+- **Phase D (playback core) was stopped mid-flight on 2026-10-20 — none of it is in
+  `main`.** Two worktrees hold its state and are deliberately left in place:
+  - `chorus-d1` (`phase-d-gain`) — **empty**; ReplayGain and the playback-speed control
+    were never started. Needs a fresh agent: `GainProcessor` ahead of Sonic via a custom
+    `DefaultRenderersFactory`, RG tag parse off the fd, speed pill in the mode row.
+  - `chorus-d2` (`phase-d-queue`) — **partial, uncommitted, unwired**. Done: playlist DB
+    **v4** `queue` + `queue_state` tables with the `old<4` migration, `saveQueue`/
+    `loadQueue` on PlaylistStore, sleep-deadline persistence in `Settings`,
+    `SleepTimer.restore()`, `Track.asMediaItem()`. **Missing:** nobody calls any of it —
+    `PlaybackService` must save on transitions/queue edits, restore paused on create, and
+    call `SleepTimer.restore()`. On merge, its v4 branch drops into the empty `old<4`
+    slot Phase E already cut (E shipped the DB at **v5**; land final version at v5+).
+- No gapless/crossfade. Gapless specifically is *unverified* — ExoPlayer claims native
+  encoded gapless, but nobody has listened for it on a device yet.
+- The sleep timer is in-memory only **in the shipped build** (Phase D2's persistence is
+  the unfinished work above).
+- **On-device checks pending for what *did* ship** (installed 2026-10-20, 1,664,575
+  bytes): notification tap opens the player; M3U export/import round-trip incl. re-import
+  updates vs duplicates; Folders tab (breadcrumb, cycle-mode crumb targets, 7-slot tab
+  strip fit at narrow width); v3→v5 DB upgrade on an existing install; lyrics sheet
+  (synced scroll, sidecar reads are refused ≥API 29 by design, embedded tags always work);
+  widget add/resize/transport on a cold process.
