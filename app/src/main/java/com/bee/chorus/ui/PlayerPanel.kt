@@ -1,5 +1,6 @@
 package com.bee.chorus.ui
 
+import android.content.ContentUris
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -27,7 +28,9 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.bee.chorus.R
 import com.bee.chorus.data.Favourites
+import com.bee.chorus.data.Library
 import com.bee.chorus.data.Settings
+import com.bee.chorus.lyrics.LyricsLoader
 import com.bee.chorus.playback.PlayerHolder
 import com.bee.chorus.playback.SleepTimer
 import java.util.Locale
@@ -65,6 +68,8 @@ class PlayerPanel @JvmOverloads constructor(
     private val elapsedView: TextView
     private val totalView: TextView
     private val cycleButton: TextView
+    private val lyricsButton: TextView
+    private val lyricsPanel: LyricsPanel
     private val sleepButton: TextView
     private val prevButton: TextView
     private val rewindButton: TextView
@@ -93,6 +98,8 @@ class PlayerPanel @JvmOverloads constructor(
     private val sleepOnBg: Drawable
     private val cycleIdleBg: Drawable
     private val cycleOnBg: Drawable
+    private val lyricsIdleBg: Drawable
+    private val lyricsOnBg: Drawable
 
     // Design tokens, resolved once per inflation. A theme change always arrives as an
     // Activity recreation (system uiMode, or recreate() from the cycle toggle), so these
@@ -114,6 +121,9 @@ class PlayerPanel @JvmOverloads constructor(
     private var lastStarOn: Boolean? = null
     private var lastCycleOn: Boolean? = null
     private var lastSleepArmed = false
+    private var lastLyricsOn: Boolean? = null
+    private var lyricsOpen = false
+    private var lyricsKey: String? = null
     private var measuredSide = -1
 
     // Held as a property so the *same* instance can be handed back to removePlayerListener,
@@ -146,6 +156,8 @@ class PlayerPanel @JvmOverloads constructor(
         elapsedView = findViewById(R.id.player_elapsed)
         totalView = findViewById(R.id.player_total)
         cycleButton = findViewById(R.id.player_cycle)
+        lyricsButton = findViewById(R.id.player_lyrics_toggle)
+        lyricsPanel = findViewById(R.id.player_lyrics)
         sleepButton = findViewById(R.id.player_sleep)
         prevButton = findViewById(R.id.player_prev)
         rewindButton = findViewById(R.id.player_rewind)
@@ -177,6 +189,8 @@ class PlayerPanel @JvmOverloads constructor(
         sleepOnBg = pill(pillOn, 0)
         cycleIdleBg = pill(pillIdle, pillBorder)
         cycleOnBg = pill(pillStrong, 0)
+        lyricsIdleBg = pill(pillIdle, pillBorder)
+        lyricsOnBg = pill(pillOn, 0)
 
         styleBackdrop()
         styleArtCard()
@@ -187,6 +201,7 @@ class PlayerPanel @JvmOverloads constructor(
         wireButtons()
         setMarquee(titleView)
         renderCycle()
+        renderLyricsToggle()
     }
 
     // ---------------------------------------------------------------- public
@@ -508,6 +523,7 @@ class PlayerPanel @JvmOverloads constructor(
         renderTransport(player)
         renderModes(player)
         renderStar(player)
+        renderLyrics(player)
 
         // Keep the position fresh while audio is actually advancing.
         if (player.isPlaying) scheduleTick() else stopTick()
@@ -541,6 +557,10 @@ class PlayerPanel @JvmOverloads constructor(
             }
             if (totalView.text != ZERO_TIME) totalView.text = ZERO_TIME
         }
+
+        // The lyrics sheet rides the same tick as the bar (see [tick]) — no second timer,
+        // and no work at all while the sheet is closed.
+        if (lyricsOpen) lyricsPanel.syncTo(player.currentPosition)
     }
 
     private fun renderTransport(player: Player) {
@@ -690,6 +710,64 @@ class PlayerPanel @JvmOverloads constructor(
             if (on) "Cycle mode on, tap to turn off" else "Cycle mode off, tap to turn on"
     }
 
+    // ---------------------------------------------------------------- lyrics
+
+    /**
+     * Lyrics are read only when the sheet is open, and only once per track — the key is the
+     * item's URI, so a library browse never touches the filesystem for lyrics. A read that
+     * lands after the track has changed is dropped by the same key.
+     */
+    private fun renderLyrics(player: Player) {
+        val item = player.currentMediaItem
+        // localConfiguration is the normal source; the media id fallback keeps the feature
+        // working if a controller snapshot ever arrives without it (media ids are track ids).
+        val uri = item?.localConfiguration?.uri
+            ?: item?.mediaId?.toLongOrNull()?.let { ContentUris.withAppendedId(Library.TRACKS_URI, it) }
+        val key = uri?.toString()
+        if (key == lyricsKey) return
+        lyricsKey = key
+        if (!lyricsOpen) return
+        if (uri == null || key == null) {
+            lyricsPanel.bind(null)
+            return
+        }
+        lyricsPanel.showLoading()
+        LyricsLoader.load(context.applicationContext, uri, key) { lyrics ->
+            if (!lyricsOpen || lyricsKey != key) return@load
+            lyricsPanel.bind(lyrics)
+            // Paused playback produces no tick, so place the highlight once here.
+            lastPlayer?.let { lyricsPanel.syncTo(it.currentPosition) }
+        }
+    }
+
+    /**
+     * Open or close the sheet over the artwork. The art stays loaded underneath (it is
+     * simply covered), so closing costs nothing but a visibility flip. Opening forces a
+     * fresh bind because nothing was loaded while it was hidden.
+     */
+    private fun setLyricsOpen(open: Boolean) {
+        lyricsOpen = open
+        lyricsPanel.visibility = if (open) View.VISIBLE else View.GONE
+        renderLyricsToggle()
+        if (!open) return
+        lyricsKey = null
+        val player = lastPlayer
+        if (player == null) lyricsPanel.bind(null) else {
+            renderLyrics(player)
+            lyricsPanel.syncTo(player.currentPosition)
+        }
+    }
+
+    /** The toggle's pill: muted idle weight, accent when the sheet is open. */
+    private fun renderLyricsToggle() {
+        if (lyricsOpen == lastLyricsOn) return
+        lastLyricsOn = lyricsOpen
+        lyricsButton.setBackground(if (lyricsOpen) lyricsOnBg else lyricsIdleBg)
+        lyricsButton.setTextColor(if (lyricsOpen) accentText else mutedText)
+        lyricsButton.contentDescription =
+            if (lyricsOpen) "Lyrics shown, tap to hide" else "Lyrics hidden, tap to show"
+    }
+
     /** Options sheet: cancel when running, then the four timed presets and end-of-track. */
     private fun sleepDialog() {
         val running = SleepTimer.mode() != SleepTimer.Mode.OFF
@@ -810,6 +888,8 @@ class PlayerPanel @JvmOverloads constructor(
         }
 
         sleepButton.setOnClickListener { sleepDialog() }
+
+        lyricsButton.setOnClickListener { setLyricsOpen(!lyricsOpen) }
     }
 
     // ---------------------------------------------------------------- scrub preview

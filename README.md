@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.6 MB** (1,633,863 bytes — R8 full mode, English-only locales,
+**Release APK: ~1.6 MB** (1,649,879 bytes — R8 full mode, English-only locales,
 resource shrinking). No Compose, no Material, no DI
 framework, no analytics, no crash reporting, no ads, **no INTERNET permission** — the
 app cannot phone home even if it wanted to.
@@ -58,6 +58,17 @@ process being killed.
 **Queue editing** — long-press a queue row to move it up/down or remove it; the edit
 goes through the shared MediaController so the lock screen sees the same queue.
 
+**Lyrics** — the ≡ control in the full player's time row swaps the artwork square for a
+read-only lyric sheet. Sources, in order: an ID3v2 USLT/SYLT tag inside the file, then a
+`.lrc` sidecar beside it (same basename), then a plain `.txt` sidecar. Timestamped lyrics
+highlight and auto-scroll with playback on the player's existing 500 ms tick; those
+without timestamps are one scrollable block. Parsed by hand — no dependency — and no
+lyrics simply says so in one line.
+
+**Home-screen widget** — a resizable mini player (title, artist, prev / play-pause /
+next) with the album art thumbnail, driven through the same single MediaController as
+the app and updated from the service's player listener. Zero image assets, no polling.
+
 Empty screens say so in one friendly line (search, queue, playlists).
 
 **Cycle mode** (Setup tab, *or* the sun control in the full-screen player) — for use on
@@ -105,10 +116,12 @@ Two things that look wrong but are not:
 ```
 data/      Track/Album models, LibraryReader (MediaStore), PlaylistStore (SQLite:
            playlists, favourites, play_stats), Favourites (app-wide liked set), Settings
+lyrics/    Lyrics model, LRC/plain-text parser, ID3v2 USLT/SYLT reader, LyricsLoader
 playback/  PlaybackService (MediaSessionService + play counting), PlayerHolder (single
            shared controller), SleepTimer
-ui/        Art loader, adapters, PlayerPanel, MiniPlayer, Search/Queue/Playlist panels,
-           CycleMode, Theming (design-token + system-bar resolution)
+ui/        Art loader, adapters, PlayerPanel, MiniPlayer, LyricsPanel, Search/Queue/
+           Playlist panels, CycleMode, Theming (design-token + system-bar resolution)
+widget/    ChorusWidget (home-screen mini player over the same PlayerHolder)
 MainActivity, PlayerActivity
 ```
 
@@ -135,7 +148,15 @@ mini player and the full player can never drift apart.
 - **`MediaStore.Audio.Media.YEAR` is frequently 0.** Subtitles omit it when `<= 0` and
   never emit dangling `•` separators.
 - The player runs a ~500ms tick **only while playing and attached** (Media3 has no
-  position callback), self-cancelling otherwise. That is what moves the seek bar.
+  position callback), self-cancelling otherwise. That is what moves the seek bar, and the
+  lyrics sheet rides the same tick — it has no timer of its own.
+- **Lyric sidecars are best-effort by platform.** The `.lrc`/`.txt` path comes from
+  MediaStore's DATA column, and plain-file reads of non-media files are only granted below
+  API 29; on newer releases the read is refused and the embedded tag (if any) wins. An
+  embedded USLT/SYLT tag always works.
+- **The widget holds no controller of its own.** Its buttons are broadcasts that go
+  through `PlayerHolder`, so there is still exactly one MediaController; updates are
+  pushed from `PlaybackService`'s `onEvents`, never polled.
 
 ## Not done
 

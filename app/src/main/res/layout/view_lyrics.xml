@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lyrics sheet, shown inside the full-screen player's art card (see view_player.xml).
+
+     Deliberately asset-free and almost empty: the rounded page, the line views and their
+     colours are all built in LyricsPanel.kt from design tokens, because there is one text
+     style for synced lines and it has to be re-created per track anyway. Colours come from
+     the theme (?attr/chorusPlayer*), so the sheet follows light, dark and Cycle.
+
+     A ScrollView (not a RecyclerView) on purpose: a lyric sheet is a few hundred short
+     lines built once when the panel opens, and a plain column keeps the panel free of an
+     adapter, a view pool and a layout manager. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ScrollView
+        android:id="@+id/lyrics_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/lyrics_column"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="20dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="20dp" />
+    </ScrollView>
+
+    <!-- One friendly line for "this track has none" and for the moment a load is in
+         flight. British English, no exclamation mark. -->
+    <TextView
+        android:id="@+id/lyrics_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:paddingStart="28dp"
+        android:paddingEnd="28dp"
+        android:textColor="?attr/chorusPlayerTextMuted"
+        android:textSize="15sp"
+        android:visibility="gone" />
+</FrameLayout>

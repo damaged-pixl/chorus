@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Chorus</string>
+    <!-- Shown in the launcher's widget picker (API 31+). -->
+    <string name="widget_description">Current track with previous, play or pause, and next</string>
 </resources>
