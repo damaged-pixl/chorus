@@ -40,9 +40,10 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     /**
-     * Cycle mode can be flipped on the Setup tab or from this screen's own sun control.
-     * Both land here, and both need a `recreate()` — the theme is chosen before anything
-     * inflates, so the running views cannot be re-themed in place.
+     * Cycle mode can only be flipped on the Setup tab (there is deliberately no appearance
+     * control on this screen). If the player is open when that happens, [Settings] fires this
+     * and a `recreate()` re-themes it — the theme is chosen before anything inflates, so the
+     * running views cannot be re-themed in place.
      *
      * Held strongly by [Settings] for the life of the process: paired with
      * `removeListener` in `onDestroy` below.

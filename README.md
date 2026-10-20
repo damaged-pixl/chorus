@@ -60,7 +60,7 @@ goes through the shared MediaController so the lock screen sees the same queue.
 
 Empty screens say so in one friendly line (search, queue, playlists).
 
-**Cycle mode** (Setup tab, *or* the sun control in the full-screen player) — for use on
+**Cycle mode** (Setup tab only) — for use on
 a bike. Switches to a bright high-contrast theme for direct sunlight and enlarges every
 touch target to 72dp for gloved hands. Persisted in SharedPreferences.
 
@@ -70,7 +70,9 @@ touch target to 72dp for gloved hands. Persisted in SharedPreferences.
 follows the phone. `Theme.Chorus` is `Theme.AppCompat.DayNight.NoActionBar`, so switching
 the phone between light and dark recreates the activities and every screen re-themes.
 Cycle mode is the one manual override, and it is deliberate: it is high-contrast plus
-big touch targets for sunlight and gloves, not a light/dark preference.
+big touch targets for sunlight and gloves, not a light/dark preference. It is toggled only
+from the Setup tab — there is deliberately no appearance control in the full-screen player,
+so the player can never be switched off the system's light/dark by mistake.
 
 Colours are **design tokens**, not literals:
 

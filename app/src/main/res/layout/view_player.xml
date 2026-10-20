@@ -189,17 +189,10 @@
                 android:textSize="13sp" />
         </FrameLayout>
 
-        <!-- elapsed (left) ... cycle mode (centre) ... total (right).
-             Sleep used to share this centre slot; it now lives in the modes row below, so
-             the slot holds exactly one control and this row stays inside its height budget.
-             Cycle mode is a manual high-contrast override, not a light/dark preference, so
-             it stays a toggle even though the theme is DayNight, and it has to be reachable
-             from the player as well as the Setup tab.
-
-             The sun carries U+FE0E (variation selector 15) to force *text* presentation.
-             Without it Android draws U+2600 as a colour emoji, which ignores both the pill
-             background and the on/off text colour — so the control could not signal its
-             state at all. Same trap applies to any other glyph added here. -->
+        <!-- elapsed (left) ... total (right). The centre slot the sleep control used to
+             share is now empty, so the two times sit at the extremes and this row stays
+             inside its height budget. There is deliberately no appearance control here:
+             light/dark is the system UI mode, and cycle mode lives on the Setup tab only. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -217,20 +210,6 @@
                 android:text="0:00"
                 android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/player_cycle"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
-                android:clickable="true"
-                android:contentDescription="Cycle mode off, tap to turn on"
-                android:focusable="true"
-                android:gravity="center"
-                android:text="&#9728;&#65038;"
-                android:textColor="?attr/chorusPlayerTextMuted"
-                android:textSize="19sp" />
 
             <TextView
                 android:id="@+id/player_total"

@@ -27,7 +27,6 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import com.bee.chorus.R
 import com.bee.chorus.data.Favourites
-import com.bee.chorus.data.Settings
 import com.bee.chorus.playback.PlayerHolder
 import com.bee.chorus.playback.SleepTimer
 import java.util.Locale
@@ -41,9 +40,10 @@ import java.util.Locale
  *
  * Everything visual here is drawn from code: no image assets, no fonts, no Material. Colours
  * come from the *theme*'s player tokens (see [Theming]), never from a `@color` resource, so
- * the screen follows the light, dark and Cycle palettes on its own. The one deliberate
- * constant left is [ART_EDGE], the hairline around the artwork card — the card's own fill is
- * the chorusPlayerArtCard token.
+ * the screen follows whichever palette is active — the phone's light/dark UI mode, or the
+ * bright Cycle theme when cycle mode is on. The one deliberate constant left is [ART_EDGE],
+ * the hairline around the artwork card — the card's own fill is the chorusPlayerArtCard
+ * token.
  *
  * The artwork itself is decoded twice by [Art] — once at display size for the square, once at
  * 64 px for the stretched backdrop — which is what keeps the screen cheap in RAM.
@@ -64,7 +64,6 @@ class PlayerPanel @JvmOverloads constructor(
     private val previewView: TextView
     private val elapsedView: TextView
     private val totalView: TextView
-    private val cycleButton: TextView
     private val sleepButton: TextView
     private val prevButton: TextView
     private val rewindButton: TextView
@@ -91,12 +90,11 @@ class PlayerPanel @JvmOverloads constructor(
     private val starOnBg: Drawable
     private val sleepIdleBg: Drawable
     private val sleepOnBg: Drawable
-    private val cycleIdleBg: Drawable
-    private val cycleOnBg: Drawable
 
     // Design tokens, resolved once per inflation. A theme change always arrives as an
-    // Activity recreation (system uiMode, or recreate() from the cycle toggle), so these
-    // never need re-resolving — see Theming for why they come from the theme, not a colour.
+    // Activity recreation (system uiMode, or recreate() from the Setup-tab cycle toggle), so
+    // these never need re-resolving — see Theming for why they come from the theme, not a
+    // colour.
     private val accent: Int
     private val accentText: Int
     private val mutedText: Int
@@ -112,7 +110,6 @@ class PlayerPanel @JvmOverloads constructor(
     private var lastRepeatMode = -1
     private var lastStarId: Long? = null
     private var lastStarOn: Boolean? = null
-    private var lastCycleOn: Boolean? = null
     private var lastSleepArmed = false
     private var measuredSide = -1
 
@@ -145,7 +142,6 @@ class PlayerPanel @JvmOverloads constructor(
         previewView = findViewById(R.id.player_seek_preview)
         elapsedView = findViewById(R.id.player_elapsed)
         totalView = findViewById(R.id.player_total)
-        cycleButton = findViewById(R.id.player_cycle)
         sleepButton = findViewById(R.id.player_sleep)
         prevButton = findViewById(R.id.player_prev)
         rewindButton = findViewById(R.id.player_rewind)
@@ -175,8 +171,6 @@ class PlayerPanel @JvmOverloads constructor(
         starOnBg = pill(pillOn, 0)
         sleepIdleBg = pill(pillIdle, pillBorder)
         sleepOnBg = pill(pillOn, 0)
-        cycleIdleBg = pill(pillIdle, pillBorder)
-        cycleOnBg = pill(pillStrong, 0)
 
         styleBackdrop()
         styleArtCard()
@@ -186,7 +180,6 @@ class PlayerPanel @JvmOverloads constructor(
         wireSeekBar()
         wireButtons()
         setMarquee(titleView)
-        renderCycle()
     }
 
     // ---------------------------------------------------------------- public
@@ -428,10 +421,10 @@ class PlayerPanel @JvmOverloads constructor(
     }
 
     /**
-     * Rounded pill used by the mode buttons and the cycle control, in three visual weights:
-     * idle (fill + border), on (accent tint) and strong (solid, for repeat-one and cycle mode
-     * — amber on amber is unreadable in sun, so those go black there). The mask keeps the
-     * ripple inside the rounded shape.
+     * Rounded pill used by the mode buttons, in three visual weights: idle (fill + border),
+     * on (accent tint) and strong (solid, for repeat-one — amber on amber is unreadable in
+     * sun, so those go black in cycle mode). The mask keeps the ripple inside the rounded
+     * shape.
      */
     private fun pill(fill: Int, border: Int): Drawable {
         val corner = Ui.dp(context, PILL_CORNER_DP)
@@ -670,26 +663,6 @@ class PlayerPanel @JvmOverloads constructor(
         }
     }
 
-    /**
-     * Cycle-mode sun in the centre of the time row — the slot the sleep control left when it
-     * moved into the modes row. Cycle mode is the one manual appearance override left in the
-     * app (the rest is the system UI mode), and it is reachable here as well as on the Setup
-     * tab.
-     *
-     * Tapping only persists: the host Activity listens for the change and calls
-     * `recreate()`, which re-inflates this panel under the new theme. So there is nothing
-     * to update in place — the guard just avoids re-styling on every render.
-     */
-    private fun renderCycle() {
-        val on = Settings.isCycleMode(context)
-        if (on == lastCycleOn) return
-        lastCycleOn = on
-        cycleButton.setBackground(if (on) cycleOnBg else cycleIdleBg)
-        cycleButton.setTextColor(if (on) onStrongPillText else mutedText)
-        cycleButton.contentDescription =
-            if (on) "Cycle mode on, tap to turn off" else "Cycle mode off, tap to turn on"
-    }
-
     /** Options sheet: cancel when running, then the four timed presets and end-of-track. */
     private fun sleepDialog() {
         val running = SleepTimer.mode() != SleepTimer.Mode.OFF
@@ -801,12 +774,6 @@ class PlayerPanel @JvmOverloads constructor(
             // (favouritesListener) — so the pill flips without touching the player.
             val id = lastStarId ?: return@setOnClickListener
             Favourites.toggle(id)
-        }
-
-        cycleButton.setOnClickListener {
-            // Persist only. Settings listeners run synchronously, and PlayerActivity's
-            // listener calls recreate(), which re-inflates this panel on the new theme.
-            Settings.setCycleMode(context, !Settings.isCycleMode(context))
         }
 
         sleepButton.setOnClickListener { sleepDialog() }

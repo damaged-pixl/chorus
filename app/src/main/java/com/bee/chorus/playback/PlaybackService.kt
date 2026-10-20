@@ -1,5 +1,8 @@
 package com.bee.chorus.playback
 
+import android.app.PendingIntent
+import android.content.Intent
+import androidx.core.app.TaskStackBuilder
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -7,6 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.bee.chorus.PlayerActivity
 import com.bee.chorus.data.PlaylistStore
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
@@ -17,6 +21,12 @@ import java.util.concurrent.ThreadFactory
  *   - the media notification (with transport controls)
  *   - foreground-service compliance for media playback
  * Shuffle/repeat live on the ExoPlayer itself, so the notification reflects them.
+ *
+ * The notification's content intent (what a tap on it fires) is the session's
+ * `sessionActivity`. Media3's default notification reads it and calls `setContentIntent`,
+ * so with no session activity set the tap does nothing at all. It is wired to
+ * [PlayerActivity] via a [TaskStackBuilder] so a tap from the launcher stack still lands
+ * somewhere sensible, and it must be `FLAG_IMMUTABLE` for targetSdk 31+.
  */
 class PlaybackService : MediaSessionService() {
 
@@ -52,8 +62,29 @@ class PlaybackService : MediaSessionService() {
             }
         })
 
-        mediaSession = MediaSession.Builder(this, player).build()
+        mediaSession = MediaSession.Builder(this, player)
+            .setSessionActivity(sessionActivityIntent())
+            .build()
     }
+
+    /**
+     * PendingIntent for the media notification's tap target ([PlayerActivity]).
+     *
+     * The TaskStackBuilder gives the tap a parent stack, so opening the player from the
+     * notification's back-stack-less state (app swiped away, phone locked) still lets Back
+     * walk up to [com.bee.chorus.MainActivity] rather than dead-ending. `FLAG_IMMUTABLE`
+     * is mandatory for a PendingIntent used under targetSdk 31+.
+     */
+    private fun sessionActivityIntent(): PendingIntent =
+        TaskStackBuilder.create(this).run {
+            addNextIntentWithParentStack(Intent(this@PlaybackService, PlayerActivity::class.java))
+            // PendingIntent? on the platform type; it cannot be null for an explicit
+            // component, so `!!` is safe and keeps the return type non-null.
+            getPendingIntent(
+                0,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )!!
+        }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
         mediaSession
