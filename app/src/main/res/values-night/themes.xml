@@ -4,8 +4,9 @@
   — there is no in-app light/dark setting, so this file is the whole of "dark mode".
 
   Every @color reference here is from the DARK palette (chorus_dark_*). Theme.Chorus.Cycle
-  is deliberately NOT redefined: cycle mode is an explicit "bright for sunlight" override,
-  so it must keep resolving to the light theme while the device is in night mode.
+  is redefined here as well: cycle mode is high contrast and 72dp targets, never a
+  light/dark preference, so it follows the device's UI mode and inverts to pure white on
+  pure black on this side (chorus_cycle_dark_*).
 -->
 <resources>
     <style name="Theme.Chorus.Base" parent="Theme.AppCompat.DayNight.NoActionBar">
@@ -57,4 +58,42 @@
     </style>
 
     <style name="Theme.Chorus" parent="Theme.Chorus.Base" />
+
+    <!-- Cycle mode, night side: the same high-contrast override, inverted. The Base
+         definitions carry the dark palette already, so this only lifts the page to pure
+         black, the ink ramp to full alpha and the "on" fills to solid white — the same
+         handful of tokens the light-side cycle theme overrides. chorusAccentText is left
+         alone on purpose: amber reads at full contrast on black and the light side only
+         overrode it because amber-on-amber is unreadable in sun. -->
+    <style name="Theme.Chorus.Cycle" parent="Theme.Chorus.Base">
+        <item name="android:colorBackground">@color/chorus_cycle_dark_bg</item>
+        <item name="android:windowBackground">@color/chorus_cycle_dark_bg</item>
+        <item name="android:statusBarColor">@color/chorus_cycle_dark_bg</item>
+        <item name="android:navigationBarColor">@color/chorus_cycle_dark_bg</item>
+
+        <item name="android:textColorPrimary">@color/chorus_cycle_dark_text</item>
+        <item name="android:textColorSecondary">@color/chorus_cycle_dark_text</item>
+
+        <item name="chorusBg">@color/chorus_cycle_dark_bg</item>
+        <item name="chorusSurface">@color/chorus_cycle_dark_bg</item>
+        <item name="chorusSurfaceElevated">@color/chorus_cycle_dark_bg</item>
+        <item name="chorusTextPrimary">@color/chorus_cycle_dark_text</item>
+        <item name="chorusTextSecondary">@color/chorus_cycle_dark_text_secondary</item>
+        <item name="chorusTextMuted">@color/chorus_cycle_dark_text_muted</item>
+        <item name="chorusDivider">@color/chorus_cycle_dark_divider</item>
+        <item name="chorusStatusBar">@color/chorus_cycle_dark_bg</item>
+        <item name="chorusNavBar">@color/chorus_cycle_dark_bg</item>
+        <item name="colorControlNormal">@color/chorus_cycle_dark_text</item>
+
+        <item name="chorusPlayerBg">@color/chorus_cycle_dark_bg</item>
+        <item name="chorusPlayerText">@color/chorus_cycle_dark_text</item>
+        <item name="chorusPlayerTextSecondary">@color/chorus_cycle_dark_text_secondary</item>
+        <item name="chorusPlayerTextMuted">@color/chorus_cycle_dark_text</item>
+        <item name="chorusPlayerSurface">@color/chorus_cycle_dark_text</item>
+        <item name="chorusPlayerOnSurface">@color/chorus_cycle_dark_bg</item>
+        <item name="chorusPlayerPillOn">@color/chorus_cycle_dark_text</item>
+        <item name="chorusPlayerOnPillText">@color/chorus_cycle_dark_bg</item>
+        <item name="chorusPlayerPillStrong">@color/chorus_cycle_dark_text</item>
+        <item name="chorusPlayerOnStrongPillText">@color/chorus_cycle_dark_bg</item>
+    </style>
 </resources>

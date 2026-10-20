@@ -8,18 +8,19 @@
     values/themes.xml        Theme.Chorus.Base -> chorus_light_*
     values-night/themes.xml  Theme.Chorus.Base -> chorus_dark_*
     values/themes.xml        Theme.Chorus.Cycle -> chorus_light_* + chorus_cycle_*
+    values-night/themes.xml  Theme.Chorus.Cycle -> chorus_dark_* + chorus_cycle_dark_*
 
   Why not the obvious values/ + values-night/ split? A @color referenced from a theme
   resolves against the current resource configuration, so one `chorus_bg` would hand back
-  the night value the moment the phone is in dark mode — including for Theme.Chorus.Cycle,
-  which must stay bright no matter how the device is set. Keeping two palettes side by side
-  under distinct names lets the Cycle theme point at the light one unconditionally. The
-  qualifier still does its job, one level up, in values-night/themes.xml.
+  the night value at the wrong moment. The cycle themes point at their own named colours
+  unconditionally instead, so each one overrides exactly what it means to whatever the
+  device is set to. Keeping the palettes side by side under distinct names is what buys
+  that. The qualifier still does its job, one level up, in values-night/themes.xml.
 
   There is no values-night/colors.xml on purpose: nothing needs the qualifier at the colour
-  level, and one would silently break Theme.Chorus.Cycle. The only day/night colour split
-  in the app is the one drawable that cannot read a theme attribute — but it turns out to
-  need no split, so it lives here with the rest.
+  level, and one would silently break those unconditional references. The only day/night
+  colour split in the app is the one drawable that cannot read a theme attribute — but it
+  turns out to need no split, so it lives here with the rest.
 
 -->
 <resources>
@@ -128,6 +129,15 @@
     <color name="chorus_cycle_text_secondary">#FF1A1A1A</color>
     <color name="chorus_cycle_text_muted">#FF2A2A30</color>
     <color name="chorus_cycle_divider">#33000000</color>
+
+    <!-- Night twin of the same override. Cycle mode is contrast and target size, never a
+         light/dark preference, so values-night's Theme.Chorus.Cycle lifts the dark palette
+         to pure white on pure black exactly the way this one lifts the light palette. -->
+    <color name="chorus_cycle_dark_bg">#FF000000</color>
+    <color name="chorus_cycle_dark_text">#FFFFFFFF</color>
+    <color name="chorus_cycle_dark_text_secondary">#FFE6E6E6</color>
+    <color name="chorus_cycle_dark_text_muted">#FFD6D6DC</color>
+    <color name="chorus_cycle_dark_divider">#33FFFFFF</color>
 
     <!-- ===================== home-screen widget (fixed) ======================
          A widget is inflated by the launcher, not by one of our Activities, so there is no

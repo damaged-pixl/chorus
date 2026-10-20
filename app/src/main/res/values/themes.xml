@@ -8,9 +8,10 @@
   set, the Activity is recreated, and the new Base is applied.
 
   Every @color reference in this file is from the LIGHT palette (chorus_light_* / the
-  chorus_cycle_* overrides) on purpose — see values/colors.xml. It is what keeps
-  Theme.Chorus.Cycle bright when the phone itself is set to night. The dark mapping lives
-  in values-night/themes.xml, which redefines Theme.Chorus.Base and nothing else.
+  chorus_cycle_* overrides) on purpose — see values/colors.xml. The dark mapping lives in
+  values-night/themes.xml, which redefines Theme.Chorus.Base and Theme.Chorus.Cycle; the
+  platform picks that set when the phone is in night mode and the Activity is recreated
+  under it, so cycle mode follows the device's UI mode like everything else.
 -->
 <resources>
     <!-- Framework/appcompat DayNight theme, no Material dependency. -->
@@ -70,10 +71,11 @@
     <style name="Theme.Chorus" parent="Theme.Chorus.Base" />
 
     <!--
-      Cycle mode: high-contrast bright theme for direct sunlight, plus 72dp touch targets
-      (see ui/CycleMode.kt). It is NOT a light/dark preference — it is a manual override —
-      so it deliberately inherits the *light* Base rather than the DayNight one, and pushes
-      every ink colour to pure black on pure white.
+      Cycle mode: high-contrast theme for direct sunlight, plus 72dp touch targets
+      (see ui/CycleMode.kt). It is NOT a light/dark preference — it is a manual override of
+      contrast and target size, so this light-side twin still follows the phone's UI mode:
+      values-night/themes.xml holds the inverted one and the -night qualifier picks it.
+      Here it pushes every ink colour to pure black on pure white.
     -->
     <style name="Theme.Chorus.Cycle" parent="Theme.Chorus.Base">
         <item name="android:colorBackground">@color/chorus_cycle_bg</item>

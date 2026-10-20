@@ -85,8 +85,9 @@ the app and updated from the service's player listener. Zero image assets, no po
 Empty screens say so in one friendly line (search, queue, playlists).
 
 **Cycle mode** (Setup tab only) — for use on
-a bike. Switches to a bright high-contrast theme for direct sunlight and enlarges every
-touch target to 72dp for gloved hands. Persisted in SharedPreferences.
+a bike. Switches to a high-contrast theme (pure black/white, whichever way round the
+phone's UI mode has it) and enlarges every touch target to 72dp for gloved hands.
+Persisted in SharedPreferences.
 
 ## Theming
 
@@ -94,24 +95,26 @@ touch target to 72dp for gloved hands. Persisted in SharedPreferences.
 follows the phone. `Theme.Chorus` is `Theme.AppCompat.DayNight.NoActionBar`, so switching
 the phone between light and dark recreates the activities and every screen re-themes.
 Cycle mode is the one manual override, and it is deliberate: it is high-contrast plus
-big touch targets for sunlight and gloves, not a light/dark preference. It is toggled only
-from the Setup tab — there is deliberately no appearance control in the full-screen player,
-so the player can never be switched off the system's light/dark by mistake.
+big touch targets for sunlight and gloves, not a light/dark preference — so it still
+follows the phone's UI mode, with an inverted high-contrast twin in the night set. It is
+toggled only from the Setup tab — there is deliberately no appearance control in the
+full-screen player, so nothing in the player can pull the app off the system's light/dark.
 
 Colours are **design tokens**, not literals:
 
 - `res/values/attrs.xml` declares the token names as theme attributes.
-- `res/values/colors.xml` holds all three palettes (`chorus_light_*`, `chorus_dark_*`,
-  `chorus_cycle_*`).
+- `res/values/colors.xml` holds all four palettes (`chorus_light_*`, `chorus_dark_*`,
+  `chorus_cycle_*` for the light side, `chorus_cycle_dark_*` for the night side).
 - `res/values/themes.xml` maps `Theme.Chorus.Base` → the light palette and
   `Theme.Chorus.Cycle` → the light palette plus the cycle overrides.
-  `res/values-night/themes.xml` redefines `Theme.Chorus.Base` → the dark palette.
+  `res/values-night/themes.xml` redefines both against the dark palette and its cycle
+  twin.
 
 Layouts reference `?attr/chorusXxx`; Kotlin resolves them through `ui/Theming.kt`. **Do
 not reference a themed colour as `@color/…` from a layout**: a `@color` resolves by
-resource *configuration*, not by theme, so it would hand back the night value while
-`Theme.Chorus.Cycle` is active and paint the bright theme dark. That is why the two
-palettes have distinct names and there is no `values-night/colors.xml`.
+resource *configuration*, not by theme, so it hands back whichever palette the device's UI
+mode selects and silently disagrees with the cycle theme. That is why the palettes have
+distinct names and there is no `values-night/colors.xml`.
 
 Two things that look wrong but are not:
 
@@ -121,10 +124,14 @@ Two things that look wrong but are not:
   background's luminance and sets the icons through the insets controller;
   `CycleMode.applyTheme` calls it for both activities.
 - **The full-screen player is no longer pinned dark.** It follows the same DayNight
-  theme as the rest of the app. In the light (and cycle) themes the artwork square sits
+  theme as the rest of the app. In the light themes (cycle included) the artwork square sits
   on its own near-black card (`chorusPlayerArtCard`) and the legibility scrim ramps to
   near-white instead of near-black, so a pale sleeve still reads on a pale page. In the
-  dark theme the card token is transparent and the player looks exactly as it did before.
+  dark themes the card token is transparent and the player looks exactly as it did before.
+- **Cycle mode does not pin the app to light.** It only overrides contrast (pure black on
+  pure white) and, in code, target size; the phone's UI mode still decides which twin of
+  `Theme.Chorus.Cycle` applies. That is why ticking it on a phone in dark mode keeps the
+  app dark.
 
 ## Layout
 

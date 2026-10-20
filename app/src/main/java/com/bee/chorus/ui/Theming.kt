@@ -14,10 +14,10 @@ import androidx.core.view.WindowCompat
  *
  * Design tokens are declared as theme attributes (`attrs.xml`) and resolved through the
  * **Activity's** theme, never through `Context.getColor()`. That distinction matters:
- * a `@color/` reference resolves by resource *configuration* (day/night), so under cycle
- * mode on a phone that happens to be in night mode it would hand back a dark value and
- * paint a bright theme dark. Going through the theme means `Theme.Chorus.Cycle`'s
- * overrides win, whatever the system UI mode is set to.
+ * a `@color/` reference resolves by resource *configuration* (day/night), so it can hand
+ * back the wrong palette for whichever cycle theme is active — the light-side override on
+ * a phone in dark mode, or the night-side one in light mode. Going through the theme means
+ * the active theme's overrides win, whatever the system UI mode is set to.
  *
  * A theme change always arrives as an Activity recreation (system uiMode, or
  * `Activity.recreate()` from the cycle toggle), so a token resolved once at inflation

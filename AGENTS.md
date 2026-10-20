@@ -29,19 +29,23 @@ overview; this file is the quick reference for agents working here.
 - **Never reference a themed colour as `@color/…` from a layout or a theme.** Colours are
   design tokens: declared as theme attributes in `res/values/attrs.xml`, with the light,
   dark and cycle palettes all in `res/values/colors.xml` (`chorus_light_*` /
-  `chorus_dark_*` / `chorus_cycle_*`). Layouts use `?attr/chorusXxx`; Kotlin uses
-  `Theming.color(ctx, R.attr.chorusXxx)`. A `@color` resolves by *configuration*, not by
-  theme, so it would return the dark value while `Theme.Chorus.Cycle` is active and paint
-  the bright theme dark. This is also why there is deliberately **no
-  `res/values-night/colors.xml`** — the day/night switch happens in
-  `res/values-night/themes.xml`, which redefines `Theme.Chorus.Base` against the dark
-  palette. Don't "tidy" the palettes back into one name under two qualifiers.
+  `chorus_dark_*` / `chorus_cycle_*` and `chorus_cycle_dark_*`). Layouts use
+  `?attr/chorusXxx`; Kotlin uses `Theming.color(ctx, R.attr.chorusXxx)`. A `@color`
+  resolves by *configuration*, not by
+  theme, so it hands back whichever palette the device's UI mode selects and can disagree
+  with the cycle theme that is actually applied. This is also why there is deliberately
+  **no `res/values-night/colors.xml`** — the day/night switch happens in
+  `res/values-night/themes.xml`, which redefines `Theme.Chorus.Base` *and*
+  `Theme.Chorus.Cycle` against the dark palette. Don't "tidy" the palettes back into one
+  name under two qualifiers.
 - **There is no light/dark setting and there must never be one.** `Theme.Chorus` is
   `Theme.AppCompat.DayNight.NoActionBar`; the phone's UI mode drives everything, and a
   `uiMode` change arrives as a plain Activity recreation. Never add
   `android:configChanges="uiMode"` to either activity — that would block the recreation
   and leave the app on the stale palette. Cycle mode is the one manual override, and it
-  is high-contrast + 72dp targets, not a light/dark preference.
+  is high-contrast + 72dp targets, not a light/dark preference: `Theme.Chorus.Cycle` is
+  defined in **both** sets (pure black-on-white in the light set, inverted in the night
+  set), so ticking it never forces light mode.
 
 ## Stack
 

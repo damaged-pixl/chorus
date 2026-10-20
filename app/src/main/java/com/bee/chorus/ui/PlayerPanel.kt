@@ -44,7 +44,8 @@ import java.util.Locale
  * Everything visual here is drawn from code: no image assets, no fonts, no Material. Colours
  * come from the *theme*'s player tokens (see [Theming]), never from a `@color` resource, so
  * the screen follows whichever palette is active — the phone's light/dark UI mode, or the
- * bright Cycle theme when cycle mode is on. The one deliberate constant left is [ART_EDGE],
+ * high-contrast Cycle theme (its light or night twin, again per UI mode). The one
+ * deliberate constant left is [ART_EDGE],
  * the hairline around the artwork card — the card's own fill is the chorusPlayerArtCard
  * token.
  *

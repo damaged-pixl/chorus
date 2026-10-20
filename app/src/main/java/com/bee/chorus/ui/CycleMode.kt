@@ -15,8 +15,9 @@ import java.util.WeakHashMap
  *
  * Two halves:
  *  - [apply] walks a live view tree and enlarges touch targets / text in place.
- *  - [applyTheme] swaps the Activity theme for the bright, high-contrast
- *    `Theme.Chorus.Cycle` (defined in `themes.xml`).
+ *  - [applyTheme] swaps the Activity theme for the high-contrast
+ *    `Theme.Chorus.Cycle` (defined in `themes.xml` in both the light and -night sets:
+ *    cycle mode is contrast and target size, never a light/dark preference).
  *
  * Because the theme must be chosen before the views exist, the usual host flow is:
  * call [applyTheme] early in `onCreate`, `setContentView`, then call [apply] on the
@@ -143,8 +144,9 @@ object CycleMode {
      * afterwards leaves already-inflated views on the old theme. Toggling therefore requires
      * `Activity.recreate()` to take visible effect.
      *
-     * Both activities go through here, so the full-screen player picks up the bright theme
-     * exactly as MainActivity does (including dark icons on its white bars).
+     * Both activities go through here, so the full-screen player picks up the cycle theme
+     * exactly as MainActivity does (including the system-bar icons, which
+     * [Theming.applySystemBars] sets from whichever palette is now active).
      */
     fun applyTheme(activity: AppCompatActivity, enabled: Boolean) {
         activity.setTheme(if (enabled) R.style.Theme_Chorus_Cycle else R.style.Theme_Chorus)
