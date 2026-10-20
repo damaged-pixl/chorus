@@ -19,11 +19,12 @@ overview; this file is the quick reference for agents working here.
 - **Never put full-size bitmaps in lists.** `Art` has one shared 2-thread pool, an
   LruCache (heap/8), size-based subsampling, and a negative cache for artless albums.
   Keep list binds on the bounded path.
-- **Check the *release* APK size after changes** (`~1.6 MB` / 1,633,863 bytes is the
-  baseline as of 2026-10-18, after the DayNight/token work; 1,624,203 before it, itself
-  up from 1,614,627 for the six new features; earlier 1,849,450 via `localeFilters += "en"`
-  + META-INF licence excludes). Debug builds are ~8.7 MB and meaningless for size. A
-  dependency or asset regression shows up here first — this is the primary guard against
+- **Check the *release* APK size after changes** (1,652,363 bytes is the baseline as of
+  2026-10-20 after Phase E; ~1.6 MB / 1,633,863 before it (2026-10-18, after the
+  DayNight/token work); 1,624,203 before that, itself up from 1,614,627 for the six
+  new features; earlier 1,849,450 via `localeFilters += "en"`
+  + META-INF licence excludes). Debug builds are ~8.7 MB and meaningless for size.
+  A dependency or asset regression shows up here first — this is the primary guard against
   feature creep into the thin stack.
 - **Never reference a themed colour as `@color/…` from a layout or a theme.** Colours are
   design tokens: declared as theme attributes in `res/values/attrs.xml`, with the light,
@@ -65,15 +66,17 @@ No test suite — verify by building and running on device.
 
 ## Layout
 
-- `data/` — `Track.kt`/`Library.kt` models, `LibraryReader.kt` (MediaStore scan),
-  `PlaylistStore.kt` (SQLite **v3**: `playlists` + `playlist_tracks`, `favourites`,
-  `play_stats`; tracks by MediaStore id), `Favourites.kt` (app-wide liked set over
+- `data/` — `Track.kt`/`Library.kt` models, `LibraryReader.kt` (MediaStore scan;
+  reads `DATA` for file paths — deprecated but load-bearing for folders/M3U),
+  `M3u.kt` (playlist import/export text), `PlaylistStore.kt` (SQLite **v5**:
+  `playlists` + `playlist_tracks`, `favourites`, `play_stats`, `playlist_origin`;
+  tracks by MediaStore id), `Favourites.kt` (app-wide liked set over
   that DB), `Settings.kt` (SharedPreferences wrapper, one flag: cycle mode).
 - `playback/` — `PlaybackService.kt` (MediaSessionService; counts plays on media-item
   transitions), `PlayerHolder.kt`, `SleepTimer.kt` (in-memory countdown / end-of-track).
-- `ui/` — `Art.kt`, adapters, `PlayerPanel.kt`/`MiniPlayer.kt`, Search/Queue/Playlist
-  panels, `CycleMode.kt`/`CycleToggle.kt`, `Theming.kt` (the only place a token is read
-  out of a theme, plus the system-bar icon contrast).
+- `ui/` — `Art.kt`, adapters, `PlayerPanel.kt`/`MiniPlayer.kt`, Search/Queue/Playlist/
+  `FolderPanel.kt`, `CycleMode.kt`/`CycleToggle.kt`, `Theming.kt` (the only place a token
+  is read out of a theme, plus the system-bar icon contrast).
 - `MainActivity.kt` (tabs + mini player; track tab = `track_screen` sort bar + list),
   `PlayerActivity.kt` (full-screen player).
 
@@ -104,11 +107,19 @@ land once the rows exist. `PlayerActivity` registers a `Settings` listener for t
 - **`Settings` listeners are held strongly** — remove any listener capturing an Activity in
   `onDestroy`, or `recreate()` leaks it. `PlayerActivity` now has one: it watches for a
   cycle-mode change made on the Setup tab while the player is behind it, and recreates.
-- Playlist DB is **v3 with real migrations** (v1→v2 added `favourites`, v2→v3 added
-  `play_stats`; a v1 install falls through both branches). Any schema change needs a
-  version bump AND a matching `onUpgrade` branch. `Favourites`, `MainActivity` and
+- Playlist DB is **v5 with real migrations** (v1→v2 added `favourites`, v2→v3 added
+  `play_stats`, v3→v4 adds Phase D's `queue` table on merge, v4→v5 added
+  `playlist_origin`; a v1 install falls through every branch — each is guarded
+  `if (old < n)` with `IF NOT EXISTS` DDL, and the v3→v4 branch is deliberately empty
+  in this branch until Phase D lands). Any schema change needs a version bump AND a
+  matching `onUpgrade` branch. `Favourites`, `MainActivity` and
   `PlaybackService` each open their own `PlaylistStore` on the app context — safe
   because SQLite connections are pooled per file path.
+- **M3U import/export only ever touches SAF documents the user picks**
+  (`ACTION_CREATE_DOCUMENT`/`ACTION_OPEN_DOCUMENT` via the Activity Result API) — no
+  file access anywhere else, no new permissions. Import matches MediaStore `DATA`
+  paths (including relative entries resolved against the document's folder); the
+  `playlist_origin` table makes a re-import of the same document update its playlist.
 - **Play counts increment in `PlaybackService.onMediaItemTransition`** — that callback
   fires only on real track changes (never on pause/resume or in-track seeks), which is
   why the counts are right. Don't also count from the UI side.

@@ -8,7 +8,7 @@
     <!-- Tab strip: one weighted slot per tab, each holding the tab button (the ids
          MainActivity wires up) plus an accent underline that only the selected tab shows.
          Still a plain LinearLayout, not a ScrollView — a ScrollView here collapsed the
-         strip and let the list overlap it, and the six labels fit weighted slots easily.
+         strip and let the list overlap it, and the seven labels fit weighted slots easily.
          Each tab's background/text colours are applied in code (Ui.tabBackground), so the
          selected state needs no separate layout. -->
     <LinearLayout
@@ -74,6 +74,36 @@
 
             <View
                 android:id="@+id/tab_indicator_albums"
+                android:layout_width="20dp"
+                android:layout_height="2dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="6dp"
+                android:importantForAccessibility="no"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <Button
+                android:id="@+id/tab_folders"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="48dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:gravity="center"
+                android:singleLine="true"
+                android:textAllCaps="false"
+                android:textSize="13sp"
+                android:text="Folders" />
+
+            <View
+                android:id="@+id/tab_indicator_folders"
                 android:layout_width="20dp"
                 android:layout_height="2dp"
                 android:layout_gravity="bottom|center_horizontal"
@@ -211,7 +241,7 @@
         android:layout_height="1dp"
         android:importantForAccessibility="no" />
 
-    <!-- One of: track list, album list, playlist list, playlist detail,
+    <!-- One of: track list, album list, folder browser, playlist list, playlist detail,
          SearchPanel, QueuePanel, settings. Only one is visible at a time. -->
     <FrameLayout
         android:id="@+id/content"
@@ -305,6 +335,12 @@
             android:scrollbars="vertical"
             android:visibility="gone" />
 
+        <com.bee.chorus.ui.FolderPanel
+            android:id="@+id/folder_panel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
         <LinearLayout
             android:id="@+id/playlist_home"
             android:layout_width="match_parent"
@@ -343,6 +379,22 @@
                 android:paddingStart="16dp"
                 android:paddingEnd="16dp"
                 android:text="+ New playlist"
+                android:textAllCaps="false"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/import_playlist"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="56dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:gravity="start|center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="Import playlist"
                 android:textAllCaps="false"
                 android:textColor="?android:attr/textColorPrimary"
                 android:textSize="16sp" />

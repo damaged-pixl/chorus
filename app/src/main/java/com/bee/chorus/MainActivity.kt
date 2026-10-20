@@ -3,13 +3,18 @@ package com.bee.chorus
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Typeface
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -21,6 +26,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.data.Album
 import com.bee.chorus.data.Favourites
 import com.bee.chorus.data.LibraryReader
+import com.bee.chorus.data.M3u
 import com.bee.chorus.data.PlaylistStore
 import com.bee.chorus.data.Settings
 import com.bee.chorus.data.Track
@@ -28,6 +34,7 @@ import com.bee.chorus.playback.PlayerHolder
 import com.bee.chorus.ui.AlbumAdapter
 import com.bee.chorus.ui.CycleMode
 import com.bee.chorus.ui.CycleToggle
+import com.bee.chorus.ui.FolderPanel
 import com.bee.chorus.ui.MiniPlayer
 import com.bee.chorus.ui.PlaylistAdapter
 import com.bee.chorus.ui.PlaylistPanel
@@ -36,6 +43,7 @@ import com.bee.chorus.ui.SearchPanel
 import com.bee.chorus.ui.Theming
 import com.bee.chorus.ui.TrackAdapter
 import com.bee.chorus.ui.Ui
+import java.nio.file.Paths
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
@@ -47,8 +55,26 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playlistPanel: PlaylistPanel
     private lateinit var searchPanel: SearchPanel
     private lateinit var queuePanel: QueuePanel
+    private lateinit var folderPanel: FolderPanel
     private lateinit var miniPlayer: MiniPlayer
     private lateinit var cycleToggle: CycleToggle
+
+    // SAF pickers for M3U export/import. Registered as field initialisers (the Activity
+    // Result API requires registration before the activity starts) — every file this
+    // feature ever touches is behind a URI the user picks; nothing else is readable or
+    // writable. Export writes happen in writeExported(); import reads in importPlaylist().
+    private val exportLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument(M3U_MIME)) { uri ->
+            if (uri != null) writeExported(uri)
+        }
+
+    private val importLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) importPlaylist(uri)
+        }
+
+    /** (playlist id, name) waiting while the export location picker is open. */
+    private var pendingExport: Pair<Long, String>? = null
 
     private var library: List<Track> = emptyList()
     private var albums: List<Album> = emptyList()
@@ -91,6 +117,13 @@ class MainActivity : AppCompatActivity() {
         CycleMode.applyTheme(this, cycle)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // A recreation (rotation, uiMode change) while the export picker is open still
+        // receives its result — restore the waiting playlist so the write isn't dropped.
+        if (savedInstanceState?.containsKey(STATE_EXPORT_ID) == true) {
+            pendingExport = savedInstanceState.getLong(STATE_EXPORT_ID) to
+                savedInstanceState.getString(STATE_EXPORT_NAME).orEmpty()
+        }
 
         // targetSdk 36 forces edge-to-edge on Android 15+, so inset the whole UI
         // ourselves or the tab strip renders underneath the status bar.
@@ -163,6 +196,7 @@ class MainActivity : AppCompatActivity() {
                 applySort()
                 albumAdapter.submit(albums)
                 searchPanel.setTracks(tracks)
+                folderPanel.setLibrary(tracks)
                 playlistPanel.setLibrary(tracks)
                 playlistPanel.setStore(store)
                 refreshPlaylists()
@@ -252,6 +286,15 @@ class MainActivity : AppCompatActivity() {
         if (sortMode != SORT_TITLE) applySort()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // Keep a pending export pick alive across recreation (see onCreate).
+        pendingExport?.let {
+            outState.putLong(STATE_EXPORT_ID, it.first)
+            outState.putString(STATE_EXPORT_NAME, it.second)
+        }
+    }
+
     // ---------- wiring ----------
 
     private fun wireLists() {
@@ -301,6 +344,7 @@ class MainActivity : AppCompatActivity() {
         playlistPanel = findViewById(R.id.playlist_panel)
         searchPanel = findViewById(R.id.search_panel)
         queuePanel = findViewById(R.id.queue_panel)
+        folderPanel = findViewById(R.id.folder_panel)
         miniPlayer = findViewById(R.id.mini_player)
 
         // The track list's stars follow the Favourites singleton. Paired with onDestroy
@@ -337,6 +381,13 @@ class MainActivity : AppCompatActivity() {
                 .setNegativeButton("Cancel", null)
                 .show()
         }
+
+        // Playlists: import an .m3u/.m3u8 the user picks through SAF.
+        findViewById<Button>(R.id.import_playlist).setOnClickListener { startImport() }
+
+        // Folder browser: long-press on a track row gets the same add-to-playlist
+        // chooser as every other list (the tap still plays).
+        folderPanel.onTrackLongClick = { track -> addToPlaylistDialog(listOf(track)) }
     }
 
     private fun openPlaylist(id: Long, name: String) {
@@ -426,16 +477,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Long-press options for a saved playlist: rename or delete. */
+    /** Long-press options for a saved playlist: rename, export to .m3u8, or delete. */
     private fun playlistOptionsDialog(id: Long, name: String) {
         val label = name.ifBlank { "Untitled playlist" }
-        val options = arrayOf("Rename", "Delete")
+        val options = arrayOf("Rename", "Export", "Delete")
         AlertDialog.Builder(this)
             .setTitle(label)
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> renamePlaylistDialog(id, label)
-                    1 -> confirmDeletePlaylist(id, label)
+                    1 -> startExport(id, label)
+                    2 -> confirmDeletePlaylist(id, label)
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -487,12 +539,178 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    // ---------- M3U import / export ----------
+
+    /**
+     * Ask where to save the playlist (SAF picks the location — Chorus never writes
+     * outside a document the user chose). The write happens in [writeExported] once
+     * they pick one.
+     */
+    private fun startExport(id: Long, name: String) {
+        pendingExport = id to name
+        // A playlist name can contain anything; keep the suggested file name sane.
+        val suggestion = name.replace('/', ' ').trim().ifEmpty { "Playlist" } + ".m3u8"
+        exportLauncher.launch(suggestion)
+    }
+
+    /** Write the waiting playlist to the document the user just created. */
+    private fun writeExported(uri: Uri) {
+        val (id, name) = pendingExport ?: return
+        pendingExport = null
+        io.execute {
+            val byId = HashMap<Long, Track>(library.size)
+            for (t in library) byId[t.id] = t
+            val tracks = store.trackIdsIn(id).mapNotNull { byId[it] }
+            val ok = try {
+                // "wt" truncates: re-exporting over an existing file must not append.
+                contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                    out.write(M3u.build(tracks).toByteArray(Charsets.UTF_8))
+                } != null
+            } catch (e: Exception) {
+                false
+            }
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    if (ok) "Exported “$name”" else "Couldn't export “$name”",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    /** Pick an .m3u/.m3u8 to import (ACTION_OPEN_DOCUMENT), then parse it. */
+    private fun startImport() {
+        importLauncher.launch(IMPORT_MIME)
+    }
+
+    /**
+     * Turn the picked playlist file into a Chorus playlist: entries are matched
+     * against the library by file path (relative entries resolved against the
+     * playlist's own folder where SAF can tell us it), unmatched entries are skipped
+     * and counted in one toast, and the only thing ever written is our own database.
+     * Re-importing a file imported before updates that playlist instead of duplicating
+     * it (see `PlaylistStore.playlist_origin`).
+     */
+    private fun importPlaylist(uri: Uri) {
+        io.execute {
+            val text = try {
+                contentResolver.openInputStream(uri)?.use {
+                    it.readBytes().toString(Charsets.UTF_8)
+                }
+            } catch (e: Exception) {
+                null
+            }
+            if (text == null) {
+                runOnUiThread {
+                    Toast.makeText(this, "Couldn't read that playlist file", Toast.LENGTH_SHORT)
+                        .show()
+                }
+                return@execute
+            }
+
+            val raw = displayName(uri) ?: "Imported playlist"
+            val name = raw.replace(Regex("\\.m3u8?$", RegexOption.IGNORE_CASE), "")
+                .trim().ifEmpty { "Imported playlist" }
+            val baseDir = baseDirOf(uri)
+
+            val byPath = HashMap<String, Long>(library.size)
+            for (t in library) if (t.path.isNotEmpty()) byPath[t.path] = t.id
+
+            val matched = ArrayList<Long>()
+            var missed = 0
+            for (entry in M3u.entries(text)) {
+                val id = byPath[entry] ?: baseDir?.let { base ->
+                    byPath[runCatching { Paths.get(base, entry).normalize().toString() }.getOrNull()]
+                }
+                if (id != null) matched.add(id) else missed++
+            }
+            if (matched.isEmpty()) {
+                runOnUiThread {
+                    Toast.makeText(
+                        this, "No tracks from that playlist are on this phone", Toast.LENGTH_LONG
+                    ).show()
+                }
+                return@execute
+            }
+
+            val source = uri.toString()
+            val existing = store.playlistIdByOrigin(source)
+            if (existing != null) {
+                store.replaceTracks(existing, matched)
+                store.setOrigin(existing, source)
+            } else {
+                val newId = store.createPlaylist(name)
+                store.addTracks(newId, matched)
+                store.setOrigin(newId, source)
+            }
+
+            val summary = buildString {
+                append(if (matched.size == 1) "1 track" else "${matched.size} tracks")
+                append(if (existing != null) " updated" else " added")
+                if (missed > 0) append(", $missed not found on this phone")
+            }
+            runOnUiThread {
+                refreshPlaylists()
+                // Keep an open detail view in step when its playlist was updated.
+                if (existing != null && playlistPanel.currentPlaylistId() == existing) {
+                    playlistPanel.refresh()
+                }
+                Toast.makeText(this, "“$name”: $summary", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /** Display name SAF has for [uri]; used as the new playlist's name. */
+    private fun displayName(uri: Uri): String? = try {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * The on-device folder holding the picked document, where SAF can express it —
+     * only needed to resolve *relative* entry paths. The parent comes from stripping
+     * the last path segment off the document id itself (file-style ids like
+     * "primary:Music/list.m3u8"); a primary-storage id maps onto the well-known
+     * primary mount point. Ids that are not path-shaped yield null, and their
+     * relative entries simply land in the unmatched count.
+     */
+    private fun baseDirOf(uri: Uri): String? {
+        if (!DocumentsContract.isDocumentUri(this, uri)) return null
+        val docId = try {
+            DocumentsContract.getDocumentId(uri)
+        } catch (e: Exception) {
+            return null
+        }
+        val parent = when {
+            docId.contains('/') -> docId.substringBeforeLast('/')
+            // Document at its volume's root — the volume prefix is the parent dir.
+            docId.startsWith("primary:") -> "primary:"
+            else -> return null
+        }
+        return when {
+            parent.startsWith("primary:") -> {
+                // Deprecated since API 29, but still the only way to name the primary
+                // mount point — MediaStore does not hand it back as a path.
+                @Suppress("DEPRECATION")
+                val primary = Environment.getExternalStorageDirectory().absolutePath
+                val rel = parent.removePrefix("primary:")
+                if (rel.isEmpty()) primary else "$primary/$rel"
+            }
+            parent.startsWith("/") -> parent
+            else -> null
+        }
+    }
+
     private fun wireTabs() {
         val map = mapOf(
             // track_screen (sort bar + list) is shown as one unit, so the screen id —
             // not the bare RecyclerView — is what the tab strip switches between.
             R.id.tab_tracks to R.id.track_screen,
             R.id.tab_albums to R.id.album_list,
+            R.id.tab_folders to R.id.folder_panel,
             R.id.tab_playlists to R.id.playlist_home,
             R.id.tab_search to R.id.search_panel,
             R.id.tab_queue to R.id.queue_panel,
@@ -502,6 +720,7 @@ class MainActivity : AppCompatActivity() {
         val indicators = mapOf(
             R.id.tab_tracks to R.id.tab_indicator_tracks,
             R.id.tab_albums to R.id.tab_indicator_albums,
+            R.id.tab_folders to R.id.tab_indicator_folders,
             R.id.tab_playlists to R.id.tab_indicator_playlists,
             R.id.tab_search to R.id.tab_indicator_search,
             R.id.tab_queue to R.id.tab_indicator_queue,
@@ -563,8 +782,8 @@ class MainActivity : AppCompatActivity() {
     /** Show one content view, hide the rest of the top-level panels. */
     private fun show(target: Int) {
         val panels = listOf(
-            R.id.track_screen, R.id.album_list, R.id.playlist_home, R.id.playlist_panel,
-            R.id.search_panel, R.id.queue_panel, R.id.settings_panel
+            R.id.track_screen, R.id.album_list, R.id.folder_panel, R.id.playlist_home,
+            R.id.playlist_panel, R.id.search_panel, R.id.queue_panel, R.id.settings_panel
         )
         for (id in panels) {
             val v: View = findViewById(id)
@@ -590,6 +809,7 @@ class MainActivity : AppCompatActivity() {
         trackAdapter.currentTrackId = id
         searchPanel.setCurrentTrackId(id)
         playlistPanel.setCurrentTrackId(id)
+        folderPanel.setCurrentTrackId(id)
     }
 
     override fun onDestroy() {
@@ -609,10 +829,24 @@ class MainActivity : AppCompatActivity() {
         const val SORT_PLAYS = 1
         const val SORT_RECENT = 2
 
+        /** How Android classifies .m3u/.m3u8 — export document type and import filter. */
+        const val M3U_MIME = "audio/x-mpegurl"
+
+        /** Import picker filter: the m3u types plus what file managers actually report. */
+        val IMPORT_MIME = arrayOf(
+            M3U_MIME, "application/vnd.apple.mpegurl", "text/plain",
+            "audio/*", "application/octet-stream"
+        )
+
+        /** Instance-state keys for an export pick still waiting on the picker. */
+        const val STATE_EXPORT_ID = "export_id"
+        const val STATE_EXPORT_NAME = "export_name"
+
         /** Panel shown -> the tab that owns it. Drives the tab strip's selected state. */
         val PANEL_TABS = mapOf(
             R.id.track_screen to R.id.tab_tracks,
             R.id.album_list to R.id.tab_albums,
+            R.id.folder_panel to R.id.tab_folders,
             R.id.playlist_home to R.id.tab_playlists,
             R.id.playlist_panel to R.id.tab_playlists,
             R.id.search_panel to R.id.tab_search,
