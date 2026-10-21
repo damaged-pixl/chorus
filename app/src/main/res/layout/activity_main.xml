@@ -452,13 +452,20 @@
             android:layout_height="match_parent"
             android:visibility="gone" />
 
-        <!-- The Setup tab: real settings, one row each (see view_settings.xml). -->
-        <include
+        <!-- The Setup tab: real settings, one row each (see view_settings.xml).
+             The wrapper carries the id and the visibility, because an <include>'s own
+             android:visibility is not something to rely on. -->
+        <FrameLayout
             android:id="@+id/settings_panel"
-            layout="@layout/view_settings"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:visibility="gone" />
+            android:visibility="gone">
+
+            <include
+                layout="@layout/view_settings"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </FrameLayout>
     </FrameLayout>
 
     <!-- Persistent mini player. Clicking it opens the full-screen player. -->

@@ -15,6 +15,7 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
@@ -803,13 +804,16 @@ class MainActivity : AppCompatActivity() {
             val modes = Settings.ReplayGainMode.entries.toTypedArray()
             val labels = arrayOf("Off", "Track gain", "Album gain")
             val current = modes.indexOf(Settings.replayGainMode(this))
-            Dialogs.builder(this)
+            // A single-choice dialog does not close itself, so it is dismissed by hand.
+            var dialog: AlertDialog? = null
+            dialog = Dialogs.builder(this)
                 .setTitle("ReplayGain")
                 .setSingleChoiceItems(labels, current) { _, which ->
                     // The service re-applies the mode to the track that is playing, so the
                     // change is audible at once.
                     Settings.setReplayGainMode(this, modes[which])
                     showReplayGain()
+                    dialog?.dismiss()
                 }
                 .setNegativeButton("Cancel", null)
                 .chorusShow()
