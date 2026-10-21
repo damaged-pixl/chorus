@@ -21,7 +21,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.bee.chorus/.MainActivity
 ```
 
-Debug builds are ~7.6 MB (unminified, full Kotlin stdlib) — always check the *release*
+Debug builds are ~7.5 MB (unminified, full Kotlin stdlib) — always check the *release*
 APK when you care about size.
 
 ### Signing
