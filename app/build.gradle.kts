@@ -1,7 +1,23 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.parcelize")
 }
+
+/**
+ * Release signing credentials, read from `keystore.properties` in the repository root.
+ *
+ * That file is gitignored, and so is the keystore it points at — neither ever enters the
+ * repository. Without it, a *debug* build is unaffected but a release build fails with a
+ * clear message (see the check at the bottom of this file) rather than quietly signing
+ * with the shared debug key.
+ */
+val keystoreFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystoreFile.exists()) keystoreFile.inputStream().use { load(it) }
+}
+val hasReleaseSigning = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.bee.chorus"
@@ -17,12 +33,14 @@ android {
 
     signingConfigs {
         create("release") {
-            // Fall back to the shared debug keystore so a release build always works
-            // without extra local setup.
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            // The real release key. Its location and passwords come from the gitignored
+            // keystore.properties; the keystore itself lives outside the repository.
+            if (hasReleaseSigning) {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
         }
     }
 
@@ -79,4 +97,19 @@ dependencies {
     // Playback + MediaSession (background, notification, lock-screen controls).
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-session:1.11.1")
+}
+
+// A release build without signing credentials is a mistake worth failing on loudly: the
+// old fallback signed releases with the shared *debug* key, which nobody should ship.
+// Debug builds are unaffected — they always use the standard debug keystore.
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    doFirst {
+        if (!hasReleaseSigning) {
+            throw GradleException(
+                "Release signing is not configured. Create keystore.properties in the " +
+                    "repository root with storeFile, storePassword, keyAlias and keyPassword, " +
+                    "or build the debug variant instead."
+            )
+        }
+    }
 }

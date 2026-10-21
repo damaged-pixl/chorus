@@ -8,3 +8,11 @@ local.properties
 .idea/
 *.iml
 .DS_Store
+
+# Local agent notes — Bradley's, not the project's
+AGENTS.md
+
+# Release signing: the keystore and its credentials never enter the repository
+keystore.properties
+*.jks
+*.keystore
