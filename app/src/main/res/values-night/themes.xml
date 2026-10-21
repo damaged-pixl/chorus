@@ -54,6 +54,11 @@
 
         <item name="colorAccent">@color/chorus_dark_accent</item>
         <item name="colorControlActivated">@color/chorus_dark_accent</item>
+        <!-- The radio buttons in a single-choice menu are platform drawables, so
+             their ink comes from the theme's control colours, not from colorAccent. -->
+        <item name="android:colorControlActivated">@color/chorus_dark_accent</item>
+        <item name="android:colorControlNormal">@color/chorus_dark_text_secondary</item>
+        <!-- One button style for all three bars (positive, negative, neutral). -->
         <item name="colorControlNormal">@color/chorus_dark_text_secondary</item>
     </style>
 
@@ -108,14 +113,15 @@
         <item name="android:textColorHint">@color/chorus_dark_text_muted</item>
         <item name="colorAccent">@color/chorus_dark_accent</item>
         <item name="colorControlActivated">@color/chorus_dark_accent</item>
-        <item name="android:windowTitleStyle">@style/Chorus.Dialog.Title</item>
+        <!-- The radio buttons in a single-choice menu are platform drawables, so their
+             ink comes from the theme's control colours, not from colorAccent. -->
+        <item name="android:colorControlActivated">@color/chorus_dark_accent</item>
+        <item name="android:colorControlNormal">@color/chorus_dark_text_secondary</item>
     </style>
 
-    <style name="Chorus.Dialog.Title" parent="">
-        <item name="android:textColor">@color/chorus_dark_accent_text</item>
-        <item name="android:textSize">19sp</item>
-        <item name="android:textStyle">bold</item>
-    </style>
+    <!-- The dialog's buttons: the app's accent ink, the way the rest of the app
+         accents its actions. -->
+
 
     <!-- Cycle mode's dialog, night side: pure white on pure black. -->
     <style name="Theme.Chorus.Cycle.Dialog" parent="Theme.Chorus.Dialog">
@@ -124,10 +130,9 @@
         <item name="android:textColorHint">@color/chorus_cycle_dark_text_secondary</item>
         <item name="colorAccent">@color/chorus_cycle_dark_text</item>
         <item name="colorControlActivated">@color/chorus_cycle_dark_text</item>
-        <item name="android:windowTitleStyle">@style/Chorus.Cycle.Dialog.Title</item>
+        <item name="android:colorControlActivated">@color/chorus_cycle_dark_text</item>
+        <item name="android:colorControlNormal">@color/chorus_cycle_dark_text_secondary</item>
     </style>
 
-    <style name="Chorus.Cycle.Dialog.Title" parent="">
-        <item name="android:textColor">@color/chorus_cycle_dark_text</item>
-    </style>
+
 </resources>

@@ -131,15 +131,15 @@
         <item name="android:textColorHint">@color/chorus_light_text_muted</item>
         <item name="colorAccent">@color/chorus_light_accent</item>
         <item name="colorControlActivated">@color/chorus_light_accent</item>
-        <item name="android:windowTitleStyle">@style/Chorus.Dialog.Title</item>
+        <!-- The radio buttons in a single-choice menu are platform drawables, so their
+             ink comes from the theme's control colours, not from colorAccent. -->
+        <item name="android:colorControlActivated">@color/chorus_light_accent</item>
+        <item name="android:colorControlNormal">@color/chorus_light_text_secondary</item>
     </style>
 
-    <!-- The dialog title: the app's accent ink, one size up from the body. -->
-    <style name="Chorus.Dialog.Title" parent="">
-        <item name="android:textColor">@color/chorus_light_accent_text</item>
-        <item name="android:textSize">19sp</item>
-        <item name="android:textStyle">bold</item>
-    </style>
+    <!-- The dialog's buttons: the app's accent ink, the way the rest of the app
+         accents its actions. -->
+
 
     <!--
       Cycle mode's dialog: the same shape, in the cycle palette — pure black on pure
@@ -152,10 +152,9 @@
         <item name="android:textColorHint">@color/chorus_cycle_text_secondary</item>
         <item name="colorAccent">@color/chorus_cycle_text</item>
         <item name="colorControlActivated">@color/chorus_cycle_text</item>
-        <item name="android:windowTitleStyle">@style/Chorus.Cycle.Dialog.Title</item>
+        <item name="android:colorControlActivated">@color/chorus_cycle_text</item>
+        <item name="android:colorControlNormal">@color/chorus_cycle_text_secondary</item>
     </style>
 
-    <style name="Chorus.Cycle.Dialog.Title" parent="">
-        <item name="android:textColor">@color/chorus_cycle_text</item>
-    </style>
+
 </resources>

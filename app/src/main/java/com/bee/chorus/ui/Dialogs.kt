@@ -1,6 +1,7 @@
 package com.bee.chorus.ui
 
 import android.content.Context
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import com.bee.chorus.R
 import com.bee.chorus.data.Settings
@@ -47,8 +48,28 @@ object Dialogs {
         val dialog = builder.show()
         val cycle = Settings.isCycleMode(dialog.context)
         dialog.window?.decorView?.let { CycleMode.apply(it, cycle) }
+
+        // The title and the buttons in the app's accent ink. A theme cannot do either: the
+        // platform's window-title style is private, and a button's text appearance wins
+        // over any colour a theme sets — so the views that carry them are coloured here,
+        // from the *Activity's* theme (the dialog's own theme has no Chorus tokens in it).
+        val accent = Theming.color(builder.context, R.attr.chorusAccentText)
+        dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.setTextColor(accent)
+        for (id in DIALOG_BUTTON_IDS) {
+            dialog.findViewById<TextView>(id)?.setTextColor(accent)
+        }
         return dialog
     }
+
+    /**
+     * The alert dialog's three buttons: positive, negative and neutral. All three take the
+     * accent ink, so a menu's actions read the same wherever they sit in the bar.
+     */
+    private val DIALOG_BUTTON_IDS = intArrayOf(
+        android.R.id.button1,
+        android.R.id.button2,
+        android.R.id.button3,
+    )
 }
 
 /**
