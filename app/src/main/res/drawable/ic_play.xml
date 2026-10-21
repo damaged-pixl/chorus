@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Play: a solid triangle. Drawn here rather than borrowed from an icon set, so the app
+  keeps its "no image assets" rule and its icon style stays one thing.
+
+  The fill colour is white on purpose: every use site tints this drawable from the
+  theme (or from the widget's fixed colours), so the colour here is only a placeholder.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="30dp"
+    android:height="30dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8,5 L19,12 L8,19 Z" />
+</vector>

@@ -98,6 +98,9 @@ class PlaybackService : MediaSessionService() {
             androidx.media3.common.PlaybackParameters(Settings.speed(this))
         // Re-arm a sleep timer that outlived the process (no-op when nothing was armed).
         SleepTimer.restore(this)
+        // Shuffle by default: applied before the queue is restored, so a restored queue
+        // (which carries the shuffle state the user actually left it in) still wins.
+        if (Settings.defaultShuffle(this)) player.shuffleModeEnabled = true
 
         // Play counts. onMediaItemTransition fires only when the *current item* changes —
         // pausing/resuming and seeking within a track never trigger it — so every reason
@@ -109,13 +112,7 @@ class PlaybackService : MediaSessionService() {
                 // ReplayGain. The URI lives on the item's local configuration (built by
                 // PlayerHolder/restore); no URI, no gain. Parsed on the IO thread and
                 // cached per id, so only the first play of an untagged track costs a read.
-                mediaItem.localConfiguration?.uri?.let { uri ->
-                    statsIo.execute {
-                        gainProvider.setFactor(
-                            ReplayGain.factorFor(applicationContext, id, uri)
-                        )
-                    }
-                }
+                applyGain(mediaItem, Settings.replayGainMode(this@PlaybackService))
             }
 
             // Home-screen widget. onEvents already covers every state the widget draws
@@ -133,6 +130,38 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, player)
             .setSessionActivity(sessionActivityIntent())
             .build()
+
+        // A ReplayGain mode change is applied to the current track straight away.
+        Settings.addReplayGainListener(gainModeListener)
+    }
+
+    /**
+     * Apply a ReplayGain [mode] to [item]: the factor the audio sink's GainProcessor uses.
+     *
+     * OFF is applied immediately (the file is never opened). Otherwise the tags are read on
+     * the IO thread — the file open must not happen on the playback looper — and the
+     * factor is written to the provider, which the audio thread reads.
+     */
+    private fun applyGain(item: MediaItem?, mode: Settings.ReplayGainMode) {
+        val id = item?.mediaId?.toLongOrNull() ?: return
+        if (mode == Settings.ReplayGainMode.OFF) {
+            gainProvider.setFactor(1f)
+            return
+        }
+        val uri = item.localConfiguration?.uri ?: return
+        statsIo.execute {
+            gainProvider.setFactor(ReplayGain.factorFor(applicationContext, id, uri, mode))
+        }
+    }
+
+    /**
+     * ReplayGain mode changed in Setup: re-apply it to whatever is playing, so the change
+     * is audible at once rather than at the next track. The listener is removed in
+     * onDestroy — Settings holds listeners strongly, and one capturing the service would
+     * outlive it.
+     */
+    private val gainModeListener: (Settings.ReplayGainMode) -> Unit = { mode ->
+        applyGain(mediaSession?.player?.currentMediaItem, mode)
     }
 
     /**
@@ -220,7 +249,9 @@ class PlaybackService : MediaSessionService() {
         player.setMediaItems(
             items,
             (if (newIndex >= 0) newIndex else snap.currentIndex).coerceIn(0, items.size - 1),
-            snap.positionMs.coerceAtLeast(0L),
+            // "Resume where you left off" is a setting: with it off, a restored queue
+            // starts the current track from the beginning instead of the saved position.
+            if (Settings.resumePosition(this)) snap.positionMs.coerceAtLeast(0L) else 0L,
         )
         player.shuffleModeEnabled = snap.shuffle
         player.repeatMode = snap.repeatMode
@@ -259,6 +290,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        // Settings holds listeners strongly: unhook before the service goes away.
+        Settings.removeReplayGainListener(gainModeListener)
         // Final queue snapshot first, while the player still holds real state: a debounced
         // save pending when the service dies would otherwise be lost with the Handler.
         persistHandler.removeCallbacks(persistQueue)

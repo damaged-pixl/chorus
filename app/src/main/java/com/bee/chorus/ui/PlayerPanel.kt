@@ -22,7 +22,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.core.graphics.ColorUtils
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -69,17 +68,17 @@ class PlayerPanel @JvmOverloads constructor(
     private val elapsedView: TextView
     private val totalView: TextView
     private val speedButton: TextView
-    private val lyricsButton: TextView
+    private val lyricsButton: ImageView
     private val lyricsPanel: LyricsPanel
     private val sleepButton: TextView
-    private val prevButton: TextView
-    private val rewindButton: TextView
-    private val playPauseButton: TextView
-    private val forwardButton: TextView
-    private val nextButton: TextView
-    private val shuffleButton: TextView
-    private val repeatButton: TextView
-    private val starButton: TextView
+    private val prevButton: ImageView
+    private val rewindButton: ImageView
+    private val playPauseButton: ImageView
+    private val forwardButton: ImageView
+    private val nextButton: ImageView
+    private val shuffleButton: ImageView
+    private val repeatButton: ImageView
+    private val starButton: ImageView
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -422,7 +421,7 @@ class PlayerPanel @JvmOverloads constructor(
             disc,
             GradientDrawable().apply { shape = GradientDrawable.OVAL }
         )
-        playPauseButton.setTextColor(Theming.color(context, R.attr.chorusPlayerOnSurface))
+        tint(playPauseButton, Theming.color(context, R.attr.chorusPlayerOnSurface))
         playPauseButton.elevation = dp(6).toFloat()
     }
 
@@ -437,9 +436,24 @@ class PlayerPanel @JvmOverloads constructor(
         repeatButton.background = repeatIdleBg
         starButton.background = starIdleBg
         sleepButton.background = sleepIdleBg
-        for (view in listOf(shuffleButton, repeatButton, starButton, sleepButton)) {
-            view.setTextColor(mutedText)
-        }
+        tint(shuffleButton, mutedText)
+        tint(repeatButton, mutedText)
+        tint(starButton, mutedText)
+        sleepButton.setTextColor(mutedText)
+        tintSleepClock(mutedText)
+    }
+
+    /**
+     * Colour an icon-only control. The controls are drawn vectors, so the state colour
+     * rides on the drawable's tint rather than on the text.
+     */
+    private fun tint(view: ImageView, color: Int) {
+        view.imageTintList = ColorStateList.valueOf(color)
+    }
+
+    /** The sleep pill is a label with a clock icon beside it, so both need the colour. */
+    private fun tintSleepClock(color: Int) {
+        sleepButton.setCompoundDrawableTintList(ColorStateList.valueOf(color))
     }
 
     /**
@@ -571,7 +585,7 @@ class PlayerPanel @JvmOverloads constructor(
         val hasQueue = player.mediaItemCount > 0
         val playing = player.isPlaying
 
-        playPauseButton.text = if (playing) GLYPH_PAUSE else GLYPH_PLAY
+        playPauseButton.setImageResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play)
         playPauseButton.contentDescription = if (playing) "Pause" else "Play"
 
         setEnabled(prevButton, hasQueue && player.currentMediaItemIndex > 0)
@@ -595,10 +609,10 @@ class PlayerPanel @JvmOverloads constructor(
         val shuffleOn = player.shuffleModeEnabled
         if (shuffleOn != lastShuffleOn) {
             lastShuffleOn = shuffleOn
-            // Same glyph both ways: the filled pill is what says "on", so it reads at 20 m
+            // Same icon both ways: the filled pill is what says "on", so it reads at 20 m
             // (amber on the normal themes, solid black in cycle mode — see the tokens).
             shuffleButton.setBackground(if (shuffleOn) shuffleOnBg else shuffleIdleBg)
-            shuffleButton.setTextColor(if (shuffleOn) accentText else mutedText)
+            tint(shuffleButton, if (shuffleOn) accentText else mutedText)
             shuffleButton.contentDescription =
                 if (shuffleOn) "Shuffle on, tap to turn off" else "Shuffle off, tap to turn on"
         }
@@ -608,29 +622,29 @@ class PlayerPanel @JvmOverloads constructor(
             lastRepeatMode = mode
             when (mode) {
                 Player.REPEAT_MODE_ALL -> {
-                    repeatButton.text = GLYPH_REPEAT_ALL
+                    repeatButton.setImageResource(R.drawable.ic_repeat)
                     repeatButton.setBackground(repeatAllBg)
-                    repeatButton.setTextColor(accentText)
+                    tint(repeatButton, accentText)
                     repeatButton.contentDescription = "Repeating all, tap to repeat one track"
                 }
                 Player.REPEAT_MODE_ONE -> {
-                    repeatButton.text = GLYPH_REPEAT_ONE
+                    repeatButton.setImageResource(R.drawable.ic_repeat_one)
                     // Stronger than "all": one track repeating is the mode worth noticing.
                     repeatButton.setBackground(repeatOneBg)
-                    repeatButton.setTextColor(onStrongPillText)
+                    tint(repeatButton, onStrongPillText)
                     repeatButton.contentDescription = "Repeating one track, tap to turn off"
                 }
                 else -> {
-                    repeatButton.text = GLYPH_REPEAT_OFF
+                    repeatButton.setImageResource(R.drawable.ic_repeat)
                     repeatButton.setBackground(repeatIdleBg)
-                    repeatButton.setTextColor(mutedText)
+                    tint(repeatButton, mutedText)
                     repeatButton.contentDescription = "Repeat off, tap to repeat all"
                 }
             }
         }
     }
 
-    private fun setEnabled(view: TextView, enabled: Boolean) {
+    private fun setEnabled(view: View, enabled: Boolean) {
         view.isEnabled = enabled
         view.alpha = if (enabled) 1f else DISABLED_ALPHA
     }
@@ -646,9 +660,9 @@ class PlayerPanel @JvmOverloads constructor(
             if (lastStarId != null || lastStarOn != null) {
                 lastStarId = null
                 lastStarOn = null
-                starButton.text = GLYPH_STAR_OFF
+                starButton.setImageResource(R.drawable.ic_star)
                 starButton.setBackground(starIdleBg)
-                starButton.setTextColor(mutedText)
+                tint(starButton, mutedText)
                 starButton.contentDescription = "No track to favourite"
             }
             return
@@ -657,9 +671,9 @@ class PlayerPanel @JvmOverloads constructor(
         if (id != lastStarId || liked != lastStarOn) {
             lastStarId = id
             lastStarOn = liked
-            starButton.text = if (liked) GLYPH_STAR_ON else GLYPH_STAR_OFF
+            starButton.setImageResource(if (liked) R.drawable.ic_star_filled else R.drawable.ic_star)
             starButton.setBackground(if (liked) starOnBg else starIdleBg)
-            starButton.setTextColor(if (liked) accentText else mutedText)
+            tint(starButton, if (liked) accentText else mutedText)
             starButton.contentDescription =
                 if (liked) "Favourite, tap to remove" else "Not a favourite, tap to add"
         }
@@ -678,6 +692,7 @@ class PlayerPanel @JvmOverloads constructor(
             lastSleepArmed = armed
             sleepButton.setBackground(if (armed) sleepOnBg else sleepIdleBg)
             sleepButton.setTextColor(if (armed) accentText else mutedText)
+            tintSleepClock(if (armed) accentText else mutedText)
             sleepButton.contentDescription = when (mode) {
                 SleepTimer.Mode.OFF -> "Sleep timer off, tap to set"
                 SleepTimer.Mode.COUNTDOWN ->
@@ -687,10 +702,12 @@ class PlayerPanel @JvmOverloads constructor(
             }
         }
         // The countdown text is rewritten every tick — only its state is worth guarding.
+        // The clock itself is a compound drawable on the label, so it stays put while the
+        // text beside it changes.
         sleepButton.text = when (mode) {
-            SleepTimer.Mode.OFF -> GLYPH_SLEEP
-            SleepTimer.Mode.COUNTDOWN -> GLYPH_SLEEP + " " + formatTime(SleepTimer.remainingMs())
-            SleepTimer.Mode.END_OF_TRACK -> GLYPH_SLEEP + " " + END_OF_TRACK_LABEL
+            SleepTimer.Mode.OFF -> ""
+            SleepTimer.Mode.COUNTDOWN -> formatTime(SleepTimer.remainingMs())
+            SleepTimer.Mode.END_OF_TRACK -> END_OF_TRACK_LABEL
         }
     }
 
@@ -786,7 +803,7 @@ class PlayerPanel @JvmOverloads constructor(
         if (lyricsOpen == lastLyricsOn) return
         lastLyricsOn = lyricsOpen
         lyricsButton.setBackground(if (lyricsOpen) lyricsOnBg else lyricsIdleBg)
-        lyricsButton.setTextColor(if (lyricsOpen) accentText else mutedText)
+        tint(lyricsButton, if (lyricsOpen) accentText else mutedText)
         lyricsButton.contentDescription =
             if (lyricsOpen) "Lyrics shown, tap to hide" else "Lyrics hidden, tap to show"
     }
@@ -808,7 +825,7 @@ class PlayerPanel @JvmOverloads constructor(
             "Sleep timer"
         }
 
-        AlertDialog.Builder(context)
+        Dialogs.builder(context)
             .setTitle(title)
             .setItems(options.toTypedArray()) { _, which ->
                 val picked = if (running) which - 1 else which
@@ -822,7 +839,7 @@ class PlayerPanel @JvmOverloads constructor(
                 }
             }
             .setNegativeButton("Close", null)
-            .show()
+            .chorusShow()
     }
 
     // ---------------------------------------------------------------- wiring
@@ -1030,14 +1047,6 @@ class PlayerPanel @JvmOverloads constructor(
         const val FADE_MS = 180L
         const val DISABLED_ALPHA = 0.35f
 
-        const val GLYPH_PLAY = "▶"
-        const val GLYPH_PAUSE = "⏸"
-        const val GLYPH_REPEAT_OFF = "⇄"
-        const val GLYPH_REPEAT_ALL = "🔁"
-        const val GLYPH_REPEAT_ONE = "🔂"
-        const val GLYPH_STAR_ON = "★"
-        const val GLYPH_STAR_OFF = "☆"
-        const val GLYPH_SLEEP = "⏱"
         const val END_OF_TRACK_LABEL = "End of track"
 
         const val ZERO_TIME = "0:00"

@@ -140,7 +140,7 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <TextView
+                <ImageView
                     android:id="@+id/player_rewind"
                     android:layout_width="52dp"
                     android:layout_height="52dp"
@@ -148,10 +148,9 @@
                     android:clickable="true"
                     android:contentDescription="Rewind 10 seconds"
                     android:focusable="true"
-                    android:gravity="center"
-                    android:text="⏪"
-                    android:textColor="?attr/chorusPlayerTextSecondary"
-                    android:textSize="22sp" />
+                    android:scaleType="center"
+                    android:src="@drawable/ic_rewind"
+                    android:tint="?attr/chorusPlayerTextSecondary" />
 
                 <SeekBar
                     android:id="@+id/player_seek"
@@ -164,7 +163,7 @@
                     android:progress="0"
                     android:splitTrack="false" />
 
-                <TextView
+                <ImageView
                     android:id="@+id/player_forward"
                     android:layout_width="52dp"
                     android:layout_height="52dp"
@@ -172,10 +171,9 @@
                     android:clickable="true"
                     android:contentDescription="Forward 10 seconds"
                     android:focusable="true"
-                    android:gravity="center"
-                    android:text="⏩"
-                    android:textColor="?attr/chorusPlayerTextSecondary"
-                    android:textSize="22sp" />
+                    android:scaleType="center"
+                    android:src="@drawable/ic_forward"
+                    android:tint="?attr/chorusPlayerTextSecondary" />
             </LinearLayout>
 
             <!-- Where the drag would land, in the accent colour on a solid pill so it reads
@@ -240,21 +238,21 @@
                 android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="12sp" />
 
-            <!-- Lyrics toggle. A text glyph rather than an icon asset, like every other
-                 control here; "≡" reads as lines of text and needs no variation selector. -->
-            <TextView
+            <!-- Lyrics toggle. A drawn icon, like every other control here: four lines of
+                 text, which reads as a sheet of lyrics rather than a menu. -->
+            <ImageView
                 android:id="@+id/player_lyrics_toggle"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:layout_marginStart="8dp"
                 android:layout_marginEnd="8dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:contentDescription="Lyrics hidden, tap to show"
                 android:focusable="true"
-                android:gravity="center"
-                android:text="≡"
-                android:textColor="?attr/chorusPlayerTextMuted"
-                android:textSize="19sp" />
+                android:scaleType="center"
+                android:src="@drawable/ic_lyrics"
+                android:tint="?attr/chorusPlayerTextMuted" />
 
             <TextView
                 android:id="@+id/player_total"
@@ -279,7 +277,7 @@
             android:gravity="center"
             android:orientation="horizontal">
 
-            <TextView
+            <ImageView
                 android:id="@+id/player_prev"
                 android:layout_width="68dp"
                 android:layout_height="68dp"
@@ -287,26 +285,25 @@
                 android:clickable="true"
                 android:contentDescription="Previous track"
                 android:focusable="true"
-                android:gravity="center"
-                android:text="⏮"
-                android:textColor="?attr/chorusPlayerText"
-                android:textSize="24sp" />
+                android:scaleType="center"
+                android:src="@drawable/ic_prev"
+                android:tint="?attr/chorusPlayerText" />
 
-            <TextView
+            <ImageView
                 android:id="@+id/player_play_pause"
                 android:layout_width="76dp"
                 android:layout_height="76dp"
                 android:layout_marginStart="20dp"
                 android:layout_marginEnd="20dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:contentDescription="Play or pause"
                 android:focusable="true"
-                android:gravity="center"
-                android:text="▶"
-                android:textColor="?attr/chorusPlayerOnSurface"
-                android:textSize="28sp" />
+                android:scaleType="center"
+                android:src="@drawable/ic_play"
+                android:tint="?attr/chorusPlayerOnSurface" />
 
-            <TextView
+            <ImageView
                 android:id="@+id/player_next"
                 android:layout_width="68dp"
                 android:layout_height="68dp"
@@ -314,10 +311,9 @@
                 android:clickable="true"
                 android:contentDescription="Next track"
                 android:focusable="true"
-                android:gravity="center"
-                android:text="⏭"
-                android:textColor="?attr/chorusPlayerText"
-                android:textSize="24sp" />
+                android:scaleType="center"
+                android:src="@drawable/ic_next"
+                android:tint="?attr/chorusPlayerText" />
         </LinearLayout>
 
         <!-- Play modes, four to a row so cycle mode's 72dp targets still fit (each pill gets
@@ -331,56 +327,50 @@
             android:layout_marginTop="12dp"
             android:orientation="horizontal">
 
-            <TextView
+            <ImageView
                 android:id="@+id/player_shuffle"
                 android:layout_width="0dp"
                 android:layout_height="52dp"
                 android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:contentDescription="Shuffle off, tap to turn on"
                 android:focusable="true"
-                android:gravity="center"
-                android:maxLines="1"
-                android:singleLine="true"
-                android:text="🔀"
-                android:textColor="?attr/chorusPlayerTextMuted"
-                android:textSize="18sp" />
+                android:scaleType="center"
+                android:src="@drawable/ic_shuffle"
+                android:tint="?attr/chorusPlayerTextMuted" />
 
-            <TextView
+            <ImageView
                 android:id="@+id/player_repeat"
                 android:layout_width="0dp"
                 android:layout_height="52dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:contentDescription="Repeat off, tap to repeat all"
                 android:focusable="true"
-                android:gravity="center"
-                android:maxLines="1"
-                android:singleLine="true"
-                android:text="⇄"
-                android:textColor="?attr/chorusPlayerTextMuted"
-                android:textSize="18sp" />
+                android:scaleType="center"
+                android:src="@drawable/ic_repeat"
+                android:tint="?attr/chorusPlayerTextMuted" />
 
-            <TextView
+            <ImageView
                 android:id="@+id/player_star"
                 android:layout_width="0dp"
                 android:layout_height="52dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:contentDescription="Not a favourite"
                 android:focusable="true"
-                android:gravity="center"
-                android:maxLines="1"
-                android:singleLine="true"
-                android:text="☆"
-                android:textColor="?attr/chorusPlayerTextMuted"
-                android:textSize="18sp" />
+                android:scaleType="center"
+                android:src="@drawable/ic_star"
+                android:tint="?attr/chorusPlayerTextMuted" />
 
-            <!-- The countdown ("⏱ 14:32") lives in this pill; end-of-track mode reads
-                 "⏱ End of track" and ellipsises on a narrow screen, which is why every mode
-                 label keeps its content description as the authoritative wording. -->
+            <!-- The countdown ("14:32") lives in this pill, behind a clock icon; end-of-track
+                 mode reads "End of track" and ellipsises on a narrow screen, which is why
+                 every mode label keeps its content description as the authoritative wording. -->
             <TextView
                 android:id="@+id/player_sleep"
                 android:layout_width="0dp"
@@ -389,12 +379,14 @@
                 android:layout_weight="1"
                 android:clickable="true"
                 android:contentDescription="Sleep timer off, tap to set"
+                android:drawableStart="@drawable/ic_sleep"
+                android:drawablePadding="5dp"
+                android:drawableTint="?attr/chorusPlayerTextMuted"
                 android:ellipsize="end"
                 android:focusable="true"
                 android:gravity="center"
                 android:maxLines="1"
                 android:singleLine="true"
-                android:text="⏱"
                 android:textColor="?attr/chorusPlayerTextMuted"
                 android:textSize="13sp" />
         </LinearLayout>

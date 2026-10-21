@@ -7,7 +7,7 @@
   @id/subtitle and @id/duration — keep those four ids and their view types.
   The artwork background/outline is applied in TrackAdapter (rounded shape +
   clipToOutline) so no drawable resource is needed, and @id/now_playing_bar is only
-  switched on by TrackAdapter too (QueuePanel marks its current row with a ▶ prefix).
+  switched on by TrackAdapter too (QueuePanel marks its current row with a play marker).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -54,6 +54,7 @@
             android:id="@+id/title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:drawableTint="?android:attr/textColorPrimary"
             android:textSize="16sp"
             android:textStyle="bold"
             android:singleLine="true"
@@ -91,16 +92,15 @@
     <!-- Favourite star. Hidden by default so QueuePanel (which inflates this same
          layout) stays untouched; TrackAdapter shows and binds it. Clickable so the
          tap is consumed here and never also triggers the row's play action. -->
-    <TextView
+    <ImageView
         android:id="@+id/track_star"
         android:layout_width="44dp"
         android:layout_height="40dp"
         android:layout_marginStart="4dp"
-        android:gravity="center"
         android:clickable="true"
         android:focusable="true"
-        android:textSize="20sp"
-        android:includeFontPadding="false"
-        android:textColor="?android:attr/textColorSecondary"
+        android:scaleType="center"
+        android:src="@drawable/ic_star"
+        android:tint="?android:attr/textColorSecondary"
         android:visibility="gone" />
 </LinearLayout>

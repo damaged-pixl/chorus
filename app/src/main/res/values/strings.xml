@@ -3,4 +3,16 @@
     <string name="app_name">Chorus</string>
     <!-- Shown in the launcher's widget picker (API 31+). -->
     <string name="widget_description">Current track with previous, play or pause, and next</string>
+
+    <!-- The Setup tab's about sheet. %1$s is the version name. -->
+    <string name="about_text">Version %1$s
+
+Chorus plays music stored on this phone only. It has no internet permission, no analytics and no ads — it cannot phone home even if it wanted to.
+
+Built on AndroidX (core, appcompat, RecyclerView) and Media3, all under the Apache License 2.0. Gradle and the Kotlin standard library are Apache 2.0 as well.
+
+Chorus itself is free software under the GNU General Public License v3. You can read the licence below, and the full source is in the repository.</string>
+
+    <!-- Shown if the licence text cannot be read from res/raw. -->
+    <string name="about_licence_missing">The licence text could not be read from this build.</string>
 </resources>

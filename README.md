@@ -3,22 +3,43 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.66 MB** (1,664,575 bytes after the Phase E + F merges — R8 full
-mode, English-only locales, resource shrinking). No Compose, no Material, no DI
-framework, no analytics, no crash reporting, no ads, **no INTERNET permission** — the
-app cannot phone home even if it wanted to.
+**Release APK: ~1.7 MB** (R8 full mode, English-only locales, resource shrinking). No
+Compose, no Material, no DI framework, no analytics, no crash reporting, no ads,
+**no INTERNET permission** — the app cannot phone home even if it wanted to.
 
 ## Build / install
 
+You need a JDK (17 or newer) and the Android SDK. Point the build at your SDK with
+`local.properties` (`sdk.dir=/path/to/Android/sdk`) or the `ANDROID_HOME` environment
+variable, then:
+
 ```bash
-export ANDROID_HOME=/mnt/steamgames/home-cold/android-sdk
-./gradlew :app:assembleRelease
-adb install -r app/build/outputs/apk/release/app-release.apk
+./gradlew :app:assembleDebug      # a debug build, signed with the standard debug key
+./gradlew :app:assembleRelease    # a release build (see "Signing" below)
+
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.bee.chorus/.MainActivity
 ```
 
-Debug builds are ~8.7 MB (unminified, full Kotlin stdlib) — always check the *release*
+Debug builds are ~7.6 MB (unminified, full Kotlin stdlib) — always check the *release*
 APK when you care about size.
+
+### Signing
+
+Release builds are signed with a real key, never the shared debug one. The keystore and
+its credentials stay out of the repository: put a `keystore.properties` in the repository
+root with
+
+```properties
+storeFile=/absolute/path/to/chorus-release.keystore
+storePassword=…
+keyAlias=chorus
+keyPassword=…
+```
+
+and the release build will use it. Without that file a release build fails with a clear
+message rather than falling back to the debug key; debug builds are unaffected and always
+use the standard debug keystore.
 
 ## Why the stack is this thin
 
@@ -71,18 +92,26 @@ process being killed.
 **Queue editing** — long-press a queue row to move it up/down or remove it; the edit
 goes through the shared MediaController so the lock screen sees the same queue.
 
-**Lyrics** — the ≡ control in the full player's time row swaps the artwork square for a
-read-only lyric sheet. Sources, in order: an ID3v2 USLT/SYLT tag inside the file, then a
-`.lrc` sidecar beside it (same basename), then a plain `.txt` sidecar. Timestamped lyrics
-highlight and auto-scroll with playback on the player's existing 500 ms tick; those
+**Lyrics** — the lyrics control in the full player's time row swaps the artwork square
+for a read-only lyric sheet. Sources, in order: an ID3v2 USLT/SYLT tag inside the file,
+then a `.lrc` sidecar beside it (same basename), then a plain `.txt` sidecar. Timestamped
+lyrics highlight and auto-scroll with playback on the player's existing 500 ms tick; those
 without timestamps are one scrollable block. Parsed by hand — no dependency — and no
 lyrics simply says so in one line.
+
+**ReplayGain** — loudness tags (FLAC, Ogg, MP3, MP4; hand-written parsers) level the
+volume across the library. The mode is a setting: off, track gain or album gain, and the
+change applies to the track that is already playing.
 
 **Home-screen widget** — a resizable mini player (title, artist, prev / play-pause /
 next) with the album art thumbnail, driven through the same single MediaController as
 the app and updated from the service's player listener. Zero image assets, no polling.
 
 Empty screens say so in one friendly line (search, queue, playlists).
+
+**Setup tab** — the settings that are actually settings: ReplayGain mode, resume where
+you left off, start shuffled, rescan the music library, cycle mode, and the version and
+licences. Light/dark is *not* among them: the app follows the phone.
 
 **Cycle mode** (Setup tab only) — for use on
 a bike. Switches to a high-contrast theme (pure black/white, whichever way round the
@@ -137,13 +166,14 @@ Two things that look wrong but are not:
 
 ```
 data/      Track/Album models, LibraryReader (MediaStore), M3u (playlist text), PlaylistStore
-           (SQLite: playlists, favourites, play_stats, playlist_origin), Favourites (app-wide
-           liked set), Settings
+           (SQLite: playlists, favourites, play_stats, playlist_origin, queue), Favourites
+           (app-wide liked set), Settings
 lyrics/    Lyrics model, LRC/plain-text parser, ID3v2 USLT/SYLT reader, LyricsLoader
-playback/  PlaybackService (MediaSessionService + play counting), PlayerHolder (single
-           shared controller), SleepTimer
+playback/  PlaybackService (MediaSessionService + play counting + queue restore),
+           PlayerHolder (single shared controller), SleepTimer, ReplayGain + tag parsers
 ui/        Art loader, adapters, PlayerPanel, MiniPlayer, LyricsPanel, Search/Queue/
-           Playlist/Folder panels, CycleMode, Theming (design-token + system-bar resolution)
+           Playlist/Folder panels, CycleMode, Dialogs (one theme for every menu),
+           Theming (design-token + system-bar resolution)
 widget/    ChorusWidget (home-screen mini player over the same PlayerHolder)
 MainActivity, PlayerActivity
 ```
@@ -183,7 +213,37 @@ mini player and the full player can never drift apart.
 
 ## Not done
 
-- No crossfade. **ReplayGain and playback speed were started as "Phase D" and stopped
-  before any code landed** — see the Known gaps section of AGENTS.md for the exact state
-  of the `chorus-d1`/`chorus-d2` worktrees and what remains to wire up (queue and
-  sleep-timer persistence are written but not called).
+- No crossfade. Gapless playback is left at ExoPlayer's default (encoded gapless), which
+  is *unverified* on a device.
+- No "similar songs", no online anything — by design.
+
+## Licence
+
+Chorus is free software: **GNU General Public License, version 3 only** (GPL-3.0-only).
+The full text is in [`LICENSE`](LICENSE), and it ships inside the app as well (Setup tab ->
+*Version and licences* -> *Licence*), which is what the GPL asks of a distributed binary.
+
+Copyright (C) 2026 Bradley McLennan.
+
+## Third-party components
+
+Chorus bundles no third-party code beyond these dependencies, all of which are under the
+Apache License 2.0:
+
+| Component | What for |
+|---|---|
+| `androidx.core:core-ktx` | AndroidX helpers |
+| `androidx.appcompat:appcompat` | AppCompat widgets and the DayNight theme |
+| `androidx.recyclerview:recyclerview` | The list rows |
+| `androidx.media3:media3-exoplayer` | Playback |
+| `androidx.media3:media3-session` | MediaSession, the notification, lock-screen controls |
+| Kotlin standard library, Gradle, AGP | Build-time only, not shipped in the APK |
+
+The Apache-2.0 notices for these live in their own artefacts; the app's own licence
+covers Chorus itself.
+
+## Icons
+
+Every icon in the app - play, pause, skip, shuffle, repeat, the star, the clock, the
+lyric sheet - is a hand-drawn vector in `res/drawable/ic_*.xml`. No icon font, no image
+assets, no third-party icon set.

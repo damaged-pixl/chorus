@@ -362,7 +362,10 @@
                 android:gravity="start|center_vertical"
                 android:paddingStart="16dp"
                 android:paddingEnd="16dp"
-                android:text="★ Favourites"
+                android:drawableStart="@drawable/ic_star_filled"
+                android:drawablePadding="10dp"
+                android:drawableTint="?android:attr/textColorPrimary"
+                android:text="Favourites"
                 android:textAllCaps="false"
                 android:textColor="?android:attr/textColorPrimary"
                 android:textSize="16sp" />
@@ -449,29 +452,13 @@
             android:layout_height="match_parent"
             android:visibility="gone" />
 
-        <LinearLayout
+        <!-- The Setup tab: real settings, one row each (see view_settings.xml). -->
+        <include
             android:id="@+id/settings_panel"
+            layout="@layout/view_settings"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
-
-            <com.bee.chorus.ui.CycleToggle
-                android:id="@+id/cycle_toggle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-
-            <TextView
-                android:id="@+id/settings_about"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:lineSpacingExtra="3dp"
-                android:text="Chorus plays music stored on this phone only. It has no internet permission, no analytics and no ads."
-                android:textColor="?android:attr/textColorSecondary"
-                android:textSize="13sp" />
-        </LinearLayout>
+            android:visibility="gone" />
     </FrameLayout>
 
     <!-- Persistent mini player. Clicking it opens the full-screen player. -->

@@ -96,4 +96,38 @@
         <item name="chorusPlayerPillStrong">@color/chorus_cycle_dark_text</item>
         <item name="chorusPlayerOnStrongPillText">@color/chorus_cycle_dark_bg</item>
     </style>
+    <!--
+      The dark twin of the dialog theme (values/themes.xml). Same shape, dark inks: the
+      title in the accent, the body in the app's dark text ramp, the surface the app
+      draws its cards with.
+    -->
+    <style name="Theme.Chorus.Dialog" parent="Theme.AppCompat.DayNight.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_surface</item>
+        <item name="android:textColorPrimary">@color/chorus_dark_text_primary</item>
+        <item name="android:textColorSecondary">@color/chorus_dark_text_secondary</item>
+        <item name="android:textColorHint">@color/chorus_dark_text_muted</item>
+        <item name="colorAccent">@color/chorus_dark_accent</item>
+        <item name="colorControlActivated">@color/chorus_dark_accent</item>
+        <item name="android:windowTitleStyle">@style/Chorus.Dialog.Title</item>
+    </style>
+
+    <style name="Chorus.Dialog.Title" parent="">
+        <item name="android:textColor">@color/chorus_dark_accent_text</item>
+        <item name="android:textSize">19sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- Cycle mode's dialog, night side: pure white on pure black. -->
+    <style name="Theme.Chorus.Cycle.Dialog" parent="Theme.Chorus.Dialog">
+        <item name="android:textColorPrimary">@color/chorus_cycle_dark_text</item>
+        <item name="android:textColorSecondary">@color/chorus_cycle_dark_text</item>
+        <item name="android:textColorHint">@color/chorus_cycle_dark_text_secondary</item>
+        <item name="colorAccent">@color/chorus_cycle_dark_text</item>
+        <item name="colorControlActivated">@color/chorus_cycle_dark_text</item>
+        <item name="android:windowTitleStyle">@style/Chorus.Cycle.Dialog.Title</item>
+    </style>
+
+    <style name="Chorus.Cycle.Dialog.Title" parent="">
+        <item name="android:textColor">@color/chorus_cycle_dark_text</item>
+    </style>
 </resources>

@@ -10,7 +10,6 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.media3.common.Player
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -215,7 +214,7 @@ class QueuePanel @JvmOverloads constructor(
      */
     private fun showRowOptions(mediaId: String, title: String) {
         val options = arrayOf("Move up", "Move down", "Remove from queue")
-        AlertDialog.Builder(context)
+        Dialogs.builder(context)
             .setTitle(title)
             .setItems(options) { _, which ->
                 PlayerHolder.whenReady { c ->
@@ -228,7 +227,7 @@ class QueuePanel @JvmOverloads constructor(
                 }
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .chorusShow()
     }
 
     /** Live index of [mediaId] in the real queue, or -1 once it is no longer there. */
@@ -274,7 +273,7 @@ class QueuePanel @JvmOverloads constructor(
     /**
      * Queue rows reuse the shared `item_track` layout (art + title + "artist — album" +
      * right-hand slot). The right-hand slot shows the 1-based queue position; the current item
-     * is marked with a "▶" prefix and full opacity.
+     * is marked with a play triangle beside its title and full opacity.
      *
      * A long press opens the row's options sheet (move up / move down / remove) — the same
      * pattern the playlist screens use, so the dense row needs no extra per-row buttons
@@ -319,7 +318,12 @@ class QueuePanel @JvmOverloads constructor(
 
             fun bind(row: QueueRow) {
                 val playing = bindingAdapterPosition == currentIndex
-                title.text = if (playing) "$PLAYING_GLYPH ${row.title}" else row.title
+                title.text = row.title
+                // The now-playing marker is a drawn triangle beside the title, not a glyph
+                // inside it, so the title text stays exactly what the track is called.
+                title.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    if (playing) R.drawable.ic_play_small else 0, 0, 0, 0
+                )
                 title.alpha = if (playing) ON_ALPHA else OFF_ALPHA
 
                 val detail = listOfNotNull(
@@ -367,7 +371,6 @@ class QueuePanel @JvmOverloads constructor(
         const val REPEAT_OFF = "Repeat"
         const val REPEAT_ALL = "Repeat all"
         const val REPEAT_ONE = "Repeat one"
-        const val PLAYING_GLYPH = "▶"
         const val NOTHING_PLAYING = "Nothing playing"
         const val UNKNOWN_TITLE = "Unknown title"
         const val UNKNOWN_ARTIST = "Unknown artist"

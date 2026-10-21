@@ -2,6 +2,7 @@ package com.bee.chorus.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
@@ -121,7 +122,7 @@ class TrackAdapter(
         private val title: TextView = view.findViewById(R.id.title)
         private val subtitle: TextView = view.findViewById(R.id.subtitle)
         private val duration: TextView = view.findViewById(R.id.duration)
-        private val star: TextView = view.findViewById(R.id.track_star)
+        private val star: ImageView = view.findViewById(R.id.track_star)
         private val cue: View = view.findViewById(R.id.now_playing_bar)
 
         /** Off-star tint, resolved once per recycled holder, not per bind. */
@@ -201,8 +202,8 @@ class TrackAdapter(
             // of this row stays untouched) and tinted from the shared Favourites set.
             val liked = Favourites.isFavourite(t.id)
             star.visibility = View.VISIBLE
-            star.text = if (liked) STAR_ON else STAR_OFF
-            star.setTextColor(if (liked) starOnColor else starOffColor)
+            star.setImageResource(if (liked) R.drawable.ic_star_filled else R.drawable.ic_star)
+            star.imageTintList = ColorStateList.valueOf(if (liked) starOnColor else starOffColor)
             star.contentDescription =
                 if (liked) "Favourite, tap to remove" else "Not a favourite, tap to add"
         }
@@ -224,10 +225,6 @@ class TrackAdapter(
         const val UNKNOWN_TITLE = "Unknown title"
         const val UNKNOWN_DURATION = "--:--"
 
-        // Favourite star glyphs. The "on" tint is the themed accent, resolved per
-        // ViewHolder rather than baked in here.
-        const val STAR_ON = "★"
-        const val STAR_OFF = "☆"
 
         /**
          * Joins only the non-empty parts with [SEPARATOR], so a missing year or album

@@ -15,8 +15,8 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -34,6 +34,7 @@ import com.bee.chorus.playback.PlayerHolder
 import com.bee.chorus.ui.AlbumAdapter
 import com.bee.chorus.ui.CycleMode
 import com.bee.chorus.ui.CycleToggle
+import com.bee.chorus.ui.Dialogs
 import com.bee.chorus.ui.FolderPanel
 import com.bee.chorus.ui.MiniPlayer
 import com.bee.chorus.ui.PlaylistAdapter
@@ -43,6 +44,7 @@ import com.bee.chorus.ui.SearchPanel
 import com.bee.chorus.ui.Theming
 import com.bee.chorus.ui.TrackAdapter
 import com.bee.chorus.ui.Ui
+import com.bee.chorus.ui.chorusShow
 import java.nio.file.Paths
 import java.util.concurrent.Executors
 
@@ -143,6 +145,7 @@ class MainActivity : AppCompatActivity() {
         wireSortBar()
         wireTabs()
         wireCycle()
+        wireSettings()
 
         findViewById<View>(android.R.id.content).post {
             CycleMode.apply(findViewById(android.R.id.content), cycle)
@@ -162,7 +165,7 @@ class MainActivity : AppCompatActivity() {
             PackageManager.PERMISSION_GRANTED
 
     private fun requestAudio() {
-        AlertDialog.Builder(this)
+        Dialogs.builder(this)
             .setTitle("Permission needed")
             .setMessage("Chorus reads audio files already on this phone. It never uploads them anywhere.")
             .setPositiveButton("Allow") { _, _ ->
@@ -170,7 +173,7 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Not now") { _, _ -> finish() }
             .setCancelable(false)
-            .show()
+            .chorusShow()
     }
 
     override fun onRequestPermissionsResult(
@@ -366,7 +369,7 @@ class MainActivity : AppCompatActivity() {
         // Playlists: create.
         findViewById<Button>(R.id.new_playlist).setOnClickListener {
             val input = EditText(this).apply { hint = "Playlist name" }
-            AlertDialog.Builder(this)
+            Dialogs.builder(this)
                 .setTitle("New playlist")
                 .setView(input)
                 .setPositiveButton("Create") { _, _ ->
@@ -379,7 +382,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 .setNegativeButton("Cancel", null)
-                .show()
+                .chorusShow()
         }
 
         // Playlists: import an .m3u/.m3u8 the user picks through SAF.
@@ -420,7 +423,7 @@ class MainActivity : AppCompatActivity() {
                 labels.add("+ New playlist")
                 for ((_, name) in existing) labels.add(name.ifBlank { "Untitled playlist" })
 
-                AlertDialog.Builder(this)
+                Dialogs.builder(this)
                     .setTitle(
                         if (tracks.size == 1) "Add \"${tracks[0].title}\" to"
                         else "Add ${tracks.size} tracks to"
@@ -433,7 +436,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                     .setNegativeButton("Cancel", null)
-                    .show()
+                    .chorusShow()
             }
         }
     }
@@ -446,7 +449,7 @@ class MainActivity : AppCompatActivity() {
             isFocusable = true
             isFocusableInTouchMode = true
         }
-        AlertDialog.Builder(this)
+        Dialogs.builder(this)
             .setTitle("New playlist")
             .setView(input)
             .setPositiveButton("Create") { _, _ ->
@@ -460,7 +463,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .chorusShow()
     }
 
     private fun addTracksTo(playlistId: Long, tracks: List<Track>) {
@@ -481,7 +484,7 @@ class MainActivity : AppCompatActivity() {
     private fun playlistOptionsDialog(id: Long, name: String) {
         val label = name.ifBlank { "Untitled playlist" }
         val options = arrayOf("Rename", "Export", "Delete")
-        AlertDialog.Builder(this)
+        Dialogs.builder(this)
             .setTitle(label)
             .setItems(options) { _, which ->
                 when (which) {
@@ -491,12 +494,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .chorusShow()
     }
 
     private fun renamePlaylistDialog(id: Long, current: String) {
         val input = EditText(this).apply { setText(current) }
-        AlertDialog.Builder(this)
+        Dialogs.builder(this)
             .setTitle("Rename playlist")
             .setView(input)
             .setPositiveButton("Rename") { _, _ ->
@@ -515,11 +518,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .chorusShow()
     }
 
     private fun confirmDeletePlaylist(id: Long, name: String) {
-        AlertDialog.Builder(this)
+        Dialogs.builder(this)
             .setTitle("Delete playlist")
             .setMessage("\"$name\" will be removed. The music files stay on this phone.")
             .setPositiveButton("Delete") { _, _ ->
@@ -536,7 +539,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("Cancel", null)
-            .show()
+            .chorusShow()
     }
 
     // ---------- M3U import / export ----------
@@ -777,6 +780,97 @@ class MainActivity : AppCompatActivity() {
     private fun wireCycle() {
         cycleToggle = findViewById(R.id.cycle_toggle)
         cycleToggle.onChanged = { recreate() }
+    }
+
+    // ---------- settings ----------
+
+    /**
+     * The Setup tab. Every row writes straight through to [Settings] and updates its own
+     * label, so the tab always shows what the app is actually doing.
+     */
+    private fun wireSettings() {
+        // ReplayGain: off, track gain or album gain.
+        val replayGainValue = findViewById<TextView>(R.id.settings_replaygain_value)
+        fun showReplayGain() {
+            replayGainValue.text = when (Settings.replayGainMode(this)) {
+                Settings.ReplayGainMode.OFF -> "Off"
+                Settings.ReplayGainMode.TRACK -> "Track"
+                Settings.ReplayGainMode.ALBUM -> "Album"
+            }
+        }
+        showReplayGain()
+        findViewById<View>(R.id.settings_replaygain).setOnClickListener {
+            val modes = Settings.ReplayGainMode.entries.toTypedArray()
+            val labels = arrayOf("Off", "Track gain", "Album gain")
+            val current = modes.indexOf(Settings.replayGainMode(this))
+            Dialogs.builder(this)
+                .setTitle("ReplayGain")
+                .setSingleChoiceItems(labels, current) { _, which ->
+                    // The service re-applies the mode to the track that is playing, so the
+                    // change is audible at once.
+                    Settings.setReplayGainMode(this, modes[which])
+                    showReplayGain()
+                }
+                .setNegativeButton("Cancel", null)
+                .chorusShow()
+        }
+
+        // Resume position: reopen on the same track at the same point.
+        val resumeSwitch = findViewById<SwitchCompat>(R.id.settings_resume_switch)
+        resumeSwitch.isChecked = Settings.resumePosition(this)
+        resumeSwitch.setOnCheckedChangeListener { _, checked ->
+            Settings.setResumePosition(this, checked)
+        }
+
+        // Default shuffle: the state every session starts in.
+        val shuffleSwitch = findViewById<SwitchCompat>(R.id.settings_shuffle_switch)
+        shuffleSwitch.isChecked = Settings.defaultShuffle(this)
+        shuffleSwitch.setOnCheckedChangeListener { _, checked ->
+            Settings.setDefaultShuffle(this, checked)
+        }
+
+        // Rescan: read the phone's music library again, in case files have changed.
+        findViewById<View>(R.id.settings_rescan).setOnClickListener {
+            loadLibrary()
+            Toast.makeText(this, "Rescanning music library", Toast.LENGTH_SHORT).show()
+        }
+
+        // About: what the app is, what it is built on, and the licence it ships under.
+        findViewById<View>(R.id.settings_about).setOnClickListener { showAbout() }
+    }
+
+    /**
+     * The about sheet: the version, the privacy line, and the third-party components with
+     * their licences. The app is GPL-3.0, so the licence text ships with the app (in
+     * res/raw) rather than only in the repository.
+     */
+    private fun showAbout() {
+        val version = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (_: Exception) {
+            "1.0"
+        }
+        val message = getString(R.string.about_text, version)
+        Dialogs.builder(this)
+            .setTitle("Chorus")
+            .setMessage(message)
+            .setPositiveButton("Licence") { _, _ -> showLicence() }
+            .setNegativeButton("Close", null)
+            .chorusShow()
+    }
+
+    /** The licence text, shipped in res/raw so it travels with the app. */
+    private fun showLicence() {
+        val text = try {
+            resources.openRawResource(R.raw.licence_gpl_3_0).bufferedReader().use { it.readText() }
+        } catch (_: Exception) {
+            getString(R.string.about_licence_missing)
+        }
+        Dialogs.builder(this)
+            .setTitle("GNU General Public License v3")
+            .setMessage(text)
+            .setPositiveButton("Close", null)
+            .chorusShow()
     }
 
     /** Show one content view, hide the rest of the top-level panels. */

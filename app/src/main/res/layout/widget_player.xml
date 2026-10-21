@@ -65,33 +65,32 @@
             android:textSize="12sp" />
     </LinearLayout>
 
-    <TextView
+    <!-- Drawn icons, not glyphs. The widget has no Chorus theme in scope (the launcher
+         inflates it), so the tint is the widget's own fixed colour. -->
+    <ImageView
         android:id="@+id/widget_prev"
         android:layout_width="34dp"
         android:layout_height="44dp"
         android:contentDescription="Previous track"
-        android:gravity="center"
-        android:text="⏮"
-        android:textColor="@color/chorus_widget_text"
-        android:textSize="16sp" />
+        android:scaleType="center"
+        android:src="@drawable/ic_prev"
+        android:tint="@color/chorus_widget_text" />
 
-    <TextView
+    <ImageView
         android:id="@+id/widget_play"
         android:layout_width="38dp"
         android:layout_height="44dp"
         android:contentDescription="Play or pause"
-        android:gravity="center"
-        android:text="▶"
-        android:textColor="@color/chorus_widget_text"
-        android:textSize="19sp" />
+        android:scaleType="center"
+        android:src="@drawable/ic_play"
+        android:tint="@color/chorus_widget_text" />
 
-    <TextView
+    <ImageView
         android:id="@+id/widget_next"
         android:layout_width="34dp"
         android:layout_height="44dp"
         android:contentDescription="Next track"
-        android:gravity="center"
-        android:text="⏭"
-        android:textColor="@color/chorus_widget_text"
-        android:textSize="16sp" />
+        android:scaleType="center"
+        android:src="@drawable/ic_next"
+        android:tint="@color/chorus_widget_text" />
 </LinearLayout>

@@ -64,6 +64,9 @@
         <item name="colorAccent">@color/chorus_light_accent</item>
         <item name="colorControlActivated">@color/chorus_light_accent</item>
         <item name="colorControlNormal">@color/chorus_light_text_secondary</item>
+
+        <!-- Dialogs: one theme for every menu in the app (see ui/Dialogs.kt). -->
+        <item name="alertDialogTheme">@style/Theme.Chorus.Dialog</item>
     </style>
 
     <!-- Light/dark is the system UI mode, not a setting: a uiMode change picks up the
@@ -111,5 +114,48 @@
         <item name="chorusPlayerOnPillText">@color/chorus_cycle_bg</item>
         <item name="chorusPlayerPillStrong">@color/chorus_cycle_text</item>
         <item name="chorusPlayerOnStrongPillText">@color/chorus_cycle_bg</item>
+    </style>
+    <!--
+      Dialog theme. One place for every menu in the app: the title in the accent ink, the
+      list and body text in the app's own inks, the buttons in the accent, and the surface
+      the app draws its cards with.
+
+      The parent is AppCompat's DayNight dialog theme, so a dialog follows the phone's UI
+      mode exactly like the screen behind it — there is no in-app light/dark switch.
+      values-night/themes.xml holds the dark twin of this style.
+    -->
+    <style name="Theme.Chorus.Dialog" parent="Theme.AppCompat.DayNight.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_surface</item>
+        <item name="android:textColorPrimary">@color/chorus_light_text_primary</item>
+        <item name="android:textColorSecondary">@color/chorus_light_text_secondary</item>
+        <item name="android:textColorHint">@color/chorus_light_text_muted</item>
+        <item name="colorAccent">@color/chorus_light_accent</item>
+        <item name="colorControlActivated">@color/chorus_light_accent</item>
+        <item name="android:windowTitleStyle">@style/Chorus.Dialog.Title</item>
+    </style>
+
+    <!-- The dialog title: the app's accent ink, one size up from the body. -->
+    <style name="Chorus.Dialog.Title" parent="">
+        <item name="android:textColor">@color/chorus_light_accent_text</item>
+        <item name="android:textSize">19sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!--
+      Cycle mode's dialog: the same shape, in the cycle palette — pure black on pure
+      white (or the other way round, in the night set). Cycle mode is contrast and target
+      size, never a light/dark preference, so this is defined in both sets.
+    -->
+    <style name="Theme.Chorus.Cycle.Dialog" parent="Theme.Chorus.Dialog">
+        <item name="android:textColorPrimary">@color/chorus_cycle_text</item>
+        <item name="android:textColorSecondary">@color/chorus_cycle_text</item>
+        <item name="android:textColorHint">@color/chorus_cycle_text_secondary</item>
+        <item name="colorAccent">@color/chorus_cycle_text</item>
+        <item name="colorControlActivated">@color/chorus_cycle_text</item>
+        <item name="android:windowTitleStyle">@style/Chorus.Cycle.Dialog.Title</item>
+    </style>
+
+    <style name="Chorus.Cycle.Dialog.Title" parent="">
+        <item name="android:textColor">@color/chorus_cycle_text</item>
     </style>
 </resources>

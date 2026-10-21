@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.LruCache
 import androidx.media3.common.C
 import androidx.media3.common.audio.GainProcessor
+import com.bee.chorus.data.Settings
 import java.io.BufferedInputStream
 import java.io.FileInputStream
 
@@ -51,11 +52,17 @@ class ReplayGainProvider : GainProcessor.GainProvider {
 /**
  * Reads loudness tags off a track's file and resolves them to a linear gain factor.
  *
- * Track gain is preferred, album gain is the fallback (the standard "track mode" choice:
- * every song lands near the target loudness; album mode is left out deliberately — it is
- * a preference, not a default). Boosts above unity are never applied: the tags' peak
- * handling would be needed to do that safely, and quiet-by-design listening is the point
- * of ReplayGain anyway.
+ * The *mode* is a user setting (see [com.bee.chorus.data.Settings.ReplayGainMode]):
+ *  - [com.bee.chorus.data.Settings.ReplayGainMode.OFF] — no gain at all; the file is
+ *    never even opened.
+ *  - [com.bee.chorus.data.Settings.ReplayGainMode.TRACK] — the track's own gain, with the
+ *    album gain as the fallback (the standard "track mode" choice: every song lands near
+ *    the target loudness).
+ *  - [com.bee.chorus.data.Settings.ReplayGainMode.ALBUM] — the album's gain, with the
+ *    track gain as the fallback, so an album keeps its own level.
+ *
+ * Boosts above unity are never applied: the tags' peak handling would be needed to do
+ * that safely, and quiet-by-design listening is the point of ReplayGain anyway.
  *
  * Formats handled, in this library's order of prevalence:
  *  - **FLAC** — native VORBIS_COMMENT metadata block (the phone's library is ~99% FLAC).
@@ -80,35 +87,48 @@ object ReplayGain {
     private const val R128_TO_REPLAYGAIN_DB = 5f
 
     /** Parse results per MediaStore id; the library is ~500 tracks, so this covers it. */
-    private val cache = LruCache<Long, Float>(2048)
+    private val cache = LruCache<Long, ReplayGainTags.Gains>(2048)
 
     /**
-     * Linear gain factor for [mediaId], parsed from the file at [uri] on the calling
-     * thread. Untagged (or unparseable) → 1f: playback unchanged.
+     * Linear gain factor for [mediaId] under [mode], parsed from the file at [uri] on the
+     * calling thread. Untagged (or unparseable) → 1f: playback unchanged.
      */
-    fun factorFor(context: Context, mediaId: Long, uri: Uri): Float {
-        cache.get(mediaId)?.let { return it }
-        val db = readGainDb(context.contentResolver, uri)
-        val factor = if (db == null || db >= 0f) 1f else dbToFactor(db)
-        cache.put(mediaId, factor)
-        return factor
+    fun factorFor(
+        context: Context,
+        mediaId: Long,
+        uri: Uri,
+        mode: Settings.ReplayGainMode,
+    ): Float {
+        if (mode == Settings.ReplayGainMode.OFF) return 1f
+        val gains = cache.get(mediaId) ?: readGains(context.contentResolver, uri).also {
+            cache.put(mediaId, it)
+        }
+        val db = when (mode) {
+            // Album mode is the album's own figure; a file without one falls back to its
+            // track figure rather than playing on untouched.
+            Settings.ReplayGainMode.ALBUM -> gains.albumDb ?: gains.trackDb
+            else -> gains.trackDb ?: gains.albumDb
+        }
+        if (db == null || db >= 0f) return 1f
+        return dbToFactor(db)
     }
 
     private fun dbToFactor(db: Float): Float = Math.pow(10.0, db / 20.0).toFloat()
 
     // ------------------------------------------------------------------ file access
 
-    private fun readGainDb(resolver: ContentResolver, uri: Uri): Float? =
+    /** Read both gains off the file; an unreadable or untagged file yields empty gains. */
+    private fun readGains(resolver: ContentResolver, uri: Uri): ReplayGainTags.Gains =
         try {
             resolver.openFileDescriptor(uri, "r")?.use { pfd ->
                 FileInputStream(pfd.fileDescriptor).use { fis ->
                     BufferedInputStream(fis, 8 * 1024).use { input ->
-                        ReplayGainTags.gainDb(input)
+                        ReplayGainTags.gains(input) ?: ReplayGainTags.Gains(null, null)
                     }
                 }
-            }
+            } ?: ReplayGainTags.Gains(null, null)
         } catch (_: Exception) {
             // A missing, renamed or oddly-formed file must never affect playback.
-            null
+            ReplayGainTags.Gains(null, null)
         }
 }

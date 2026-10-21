@@ -74,8 +74,6 @@ class ChorusWidget : AppWidgetProvider() {
         private const val ART_TARGET_PX = 128
         private const val DISABLED_ALPHA = 0.35f
 
-        private const val GLYPH_PLAY = "▶"
-        private const val GLYPH_PAUSE = "⏸"
 
         /** The art URI the pending decode belongs to, so a slow decode cannot paint over
          *  a track that has since changed. Main thread only, like every widget update. */
@@ -125,7 +123,7 @@ class ChorusWidget : AppWidgetProvider() {
             }
 
             val playing = player?.isPlaying == true
-            views.setTextViewText(R.id.widget_play, if (playing) GLYPH_PAUSE else GLYPH_PLAY)
+            views.setImageViewResource(R.id.widget_play, if (playing) R.drawable.ic_pause else R.drawable.ic_play)
             views.setContentDescription(R.id.widget_play, if (playing) "Pause" else "Play")
             views.setFloat(
                 R.id.widget_play,

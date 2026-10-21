@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rescan: the two arrows that mean "load again". Used by the library rescan action in
+  Setup. Drawn as a loop, like ic_repeat, but with the arrows in opposite corners so it
+  reads as a refresh rather than a repeat.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,12 a7,7 0 1 1 -2.1,-5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.9" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13.6,3.6 L18.4,6.2 L16.2,11.2 Z" />
+</vector>

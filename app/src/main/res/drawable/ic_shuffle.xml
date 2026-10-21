@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shuffle: two lines crossing between the outputs, each ending in an arrowhead.
+  Stroked rather than filled, so the arrows read at 20dp.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M3,7 h3.4 c1.7,0 2.7,0.9 3.5,2 L14.6,17.2 c0.8,1.1 1.8,1.8 3.4,1.8 H20"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.9" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M3,17 h3.4 c1.7,0 2.7,-0.9 3.5,-2 L14.6,6.8 c0.8,-1.1 1.8,-1.8 3.4,-1.8 H20"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.9" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M17.6,3.2 L21,5.4 L17.6,7.6 Z M17.6,16.4 L21,18.6 L17.6,20.8 Z" />
+</vector>

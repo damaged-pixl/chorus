@@ -33,7 +33,7 @@ class MiniPlayer @JvmOverloads constructor(
     private val artView: ImageView
     private val titleView: TextView
     private val artistView: TextView
-    private val playPauseButton: TextView
+    private val playPauseButton: ImageView
     private val dividerView: View
     private val progressView: View
 
@@ -152,7 +152,9 @@ class MiniPlayer @JvmOverloads constructor(
             }
         }
 
-        playPauseButton.text = if (player.isPlaying) GLYPH_PAUSE else GLYPH_PLAY
+        playPauseButton.setImageResource(
+            if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        )
         playPauseButton.contentDescription = if (player.isPlaying) "Pause" else "Play"
 
         val hasQueue = player.mediaItemCount > 0
@@ -211,8 +213,6 @@ class MiniPlayer @JvmOverloads constructor(
         const val ART_TARGET_PX = 128
         const val ART_CORNER_DP = 8f
         const val DISABLED_ALPHA = 0.35f
-        const val GLYPH_PLAY = "▶"
-        const val GLYPH_PAUSE = "⏸"
         const val NOTHING_PLAYING = "Nothing playing"
         const val TICK_MS = 500L
     }

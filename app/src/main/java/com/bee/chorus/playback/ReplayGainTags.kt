@@ -17,14 +17,23 @@ object ReplayGainTags {
     /** Q7.8 R128 reference (−23 LUFS) to ReplayGain reference — the +5 dB convention. */
     private const val R128_TO_REPLAYGAIN_DB = 5f
 
+    /**
+     * The loudness tags found in one file, in dB. Either may be absent: a file can carry
+     * track gain only, album gain only, both, or neither.
+     *
+     * Both are kept separately so the ReplayGain *mode* (track / album) can be a user
+     * setting rather than a fixed policy — see [ReplayGain.factorFor].
+     */
+    data class Gains(val trackDb: Float?, val albumDb: Float?)
+
     // ------------------------------------------------------------------ sniff + dispatch
 
     /**
      * Parse loudness tags from [input] (positioned at the container start): dispatch on
-     * the magic bytes, returning the resolved dB figure or null when the file carries no
+     * the magic bytes, returning the track/album gains or null when the file carries no
      * usable gain tags. Pure stream code — no Android types — so it is testable on the JVM.
      */
-    fun gainDb(input: BufferedInputStream): Float? {
+    fun gains(input: BufferedInputStream): Gains? {
         input.mark(8)
         val head = input.readN(8) ?: return null
         input.reset()
@@ -44,17 +53,22 @@ object ReplayGainTags {
     // ------------------------------------------------------------------ value resolution
 
     /**
-     * Resolve a comment map (keys upper-cased) to one dB figure: track first, then album,
-     * REPLAYGAIN spelling before R128 (an Opus file SHOULD only carry one flavour).
-     * [extraDb] carries container-level gain (Opus output gain).
+     * Resolve a comment map (keys upper-cased) to track and album gains: REPLAYGAIN
+     * spelling before R128 (an Opus file SHOULD only carry one flavour).
+     * [extraDb] carries container-level gain (Opus output gain), which applies to both.
      */
-    private fun dbFromComments(comments: Map<String, String>, extraDb: Float = 0f): Float? {
+    private fun gainsFromComments(
+        comments: Map<String, String>,
+        extraDb: Float = 0f,
+    ): Gains {
         val track = parseGainDb(comments["REPLAYGAIN_TRACK_GAIN"])
             ?: parseR128(comments["R128_TRACK_GAIN"])?.plus(R128_TO_REPLAYGAIN_DB)
-        if (track != null) return track + extraDb
         val album = parseGainDb(comments["REPLAYGAIN_ALBUM_GAIN"])
             ?: parseR128(comments["R128_ALBUM_GAIN"])?.plus(R128_TO_REPLAYGAIN_DB)
-        return album?.plus(extraDb)
+        return Gains(
+            trackDb = track?.plus(extraDb),
+            albumDb = album?.plus(extraDb),
+        )
     }
 
     /** "-6.50 dB" / "+1.2" → dB. Tolerates surrounding whitespace and the "dB" suffix. */
@@ -77,7 +91,7 @@ object ReplayGainTags {
      * "fLaC" magic, then metadata blocks (last-flag/type byte, 24-bit BE length). Block
      * type 4 is the VORBIS_COMMENT; the parse stops there — audio is never read.
      */
-    private fun parseFlac(input: BufferedInputStream): Float? {
+    private fun parseFlac(input: BufferedInputStream): Gains? {
         input.readN(4) ?: return null                      // magic
         repeat(256) {                                      // block cap, not audio cap
             val header = input.u8() ?: throw EOFException()
@@ -85,7 +99,7 @@ object ReplayGainTags {
             val length = input.be24()
             if (type == 4) {
                 val block = input.readN(length) ?: throw EOFException()
-                return dbFromComments(vorbisComments(block))
+                return gainsFromComments(vorbisComments(block))
             }
             input.skipFully(length.toLong())
             if (header and 0x80 != 0) return null          // last block, no comment
@@ -131,7 +145,7 @@ object ReplayGainTags {
      * headers that matter are in hand: the codec ID header (Opus `output gain`) and the
      * comment packet (`OpusTags` for Opus, `\x03vorbis` for Vorbis).
      */
-    private fun parseOgg(input: BufferedInputStream): Float? {
+    private fun parseOgg(input: BufferedInputStream): Gains? {
         var opusHeaderDb = 0f
         var opus = false
         var current = java.io.ByteArrayOutputStream()
@@ -169,13 +183,13 @@ object ReplayGainTags {
                             }
                         }
                         text.startsWith("OpusTags") ->
-                            return dbFromComments(
+                            return gainsFromComments(
                                 vorbisComments(packet.copyOfRange(8, packet.size)),
                                 opusHeaderDb,
                             )
                         text.startsWith("\u0001vorbis") -> seenVorbisId = true
                         seenVorbisId && text.startsWith("\u0003vorbis") ->
-                            return dbFromComments(
+                            return gainsFromComments(
                                 vorbisComments(packet.copyOfRange(7, packet.size)),
                             )
                     }
@@ -188,7 +202,7 @@ object ReplayGainTags {
     // ------------------------------------------------------------------ ID3v2 (MP3)
 
     /** ID3v2 header + TXXX frames (2.3 and 2.4). */
-    private fun parseId3(input: BufferedInputStream): Float? {
+    private fun parseId3(input: BufferedInputStream): Gains? {
         val header = input.readN(10) ?: throw EOFException()
         val major = header[3].toInt() and 0xFF
         val flags = header[5].toInt() and 0xFF
@@ -220,7 +234,7 @@ object ReplayGainTags {
                 putComment(comments, "${pair.first}=${pair.second}")
             }
         }
-        return dbFromComments(comments)
+        return gainsFromComments(comments)
     }
 
     /** TXXX body: encoding byte, description (NUL-terminated), value. */
@@ -256,12 +270,12 @@ object ReplayGainTags {
      * entries with mean/name/data children. Sizes are big-endian; 0 means "to end of
      * file", 1 introduces a 64-bit largesize.
      */
-    private fun parseMp4(input: BufferedInputStream): Float? {
+    private fun parseMp4(input: BufferedInputStream): Gains? {
         val comments = HashMap<String, String>(4)
         // Top-level limit is "until EOF": atom sizes are authoritative, and readN/skip
         // throw at a truncated file, which the outer catch turns into "no gain".
         walkMp4(input, Long.MAX_VALUE / 2, 0, comments)
-        return dbFromComments(comments)
+        return gainsFromComments(comments)
     }
 
     private fun walkMp4(

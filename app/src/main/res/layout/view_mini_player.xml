@@ -74,16 +74,15 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <TextView
+        <ImageView
             android:id="@+id/mini_play_pause"
             android:layout_width="46dp"
             android:layout_height="46dp"
             android:clickable="true"
             android:focusable="true"
-            android:gravity="center"
-            android:text="▶"
-            android:textColor="?android:attr/textColorPrimary"
-            android:textSize="20sp" />
+            android:scaleType="center"
+            android:src="@drawable/ic_play"
+            android:tint="?android:attr/textColorPrimary" />
     </LinearLayout>
 
     <!-- Same amber as the full player's seek fill, so both players read as one system.
