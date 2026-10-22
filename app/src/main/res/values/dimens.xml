@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One dimension file, for the one value shared between a layout and Kotlin. -->
+<resources>
+    <!-- Width of the A–Z jump rail (view_az / activity_main), and the padding the track
+         list takes when the rail is over it, so the stars under the rail stay tappable. -->
+    <dimen name="az_rail_width">34dp</dimen>
+</resources>

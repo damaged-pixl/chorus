@@ -547,6 +547,20 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
         </FrameLayout>
+
+        <!-- A–Z jump rail over the track list. A sibling of the panels, not a child of
+             one, so it survives nothing: MainActivity shows it only while the Tracks tab
+             is up in title order, and GONE everywhere (and every when) else, so it can
+             never swallow a tap meant for another screen. -->
+        <com.bee.chorus.ui.AzScroller
+            android:id="@+id/az_scroller"
+            android:layout_width="34dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end|center_vertical"
+            android:contentDescription="Jump to letter"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:visibility="gone" />
     </FrameLayout>
 
     <!-- Persistent mini player. Clicking it opens the full-screen player. -->

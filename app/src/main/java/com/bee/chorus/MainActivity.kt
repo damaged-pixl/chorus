@@ -34,6 +34,7 @@ import com.bee.chorus.data.Settings
 import com.bee.chorus.data.Track
 import com.bee.chorus.playback.PlayerHolder
 import com.bee.chorus.ui.AlbumAdapter
+import com.bee.chorus.ui.AzScroller
 import com.bee.chorus.ui.CycleMode
 import com.bee.chorus.ui.CycleToggle
 import com.bee.chorus.ui.Dialogs
@@ -107,6 +108,11 @@ class MainActivity : AppCompatActivity() {
     // shipped with; the others are the same one bar, the same way the Tracks tab works.
     private var albumSort = ALBUM_SORT_ARTIST
     private lateinit var albumSortButtons: List<TextView>
+
+    // A–Z jump rail over the track list, and the panel the screen is currently on (the
+    // rail belongs to one panel only, so it needs to know which one is up).
+    private lateinit var azScroller: AzScroller
+    private var activePanel = R.id.track_screen
 
     // Sort-bar tints, resolved in wireSortBar() rather than as field initialisers: the
     // theme is not final until onCreate has had its say (CycleMode.applyTheme runs first),
@@ -356,7 +362,10 @@ class MainActivity : AppCompatActivity() {
         updateSortBar()
         when (sortMode) {
             // MediaStore scans in title order already; no work needed.
-            SORT_TITLE -> trackAdapter.submit(library)
+            SORT_TITLE -> {
+                trackAdapter.submit(library)
+                updateAzRail()
+            }
             else -> io.execute {
                 val stats = store.playStats()
                 // Unplayed tracks (0 / never) sort last; ties break A–Z for a stable list.
@@ -373,9 +382,59 @@ class MainActivity : AppCompatActivity() {
                             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
                     )
                 }
-                runOnUiThread { trackAdapter.submit(sorted) }
+                runOnUiThread {
+                    trackAdapter.submit(sorted)
+                    // A rail only means anything in title order: in "Most played" the
+                    // first row is not "A", and jumping to it would be nonsense.
+                    updateAzRail()
+                }
             }
         }
+    }
+
+    /**
+     * Rebuild the A–Z rail — one entry per letter the list actually starts with, in order
+     * — and decide whether the rail should be on screen at all: only on the Tracks tab,
+     * and only in title order. Everything else hides it, so it can never swallow a tap
+     * meant for another screen.
+     *
+     * The index reads [library] directly, which is exactly what the title sort submits
+     * (MediaStore returns rows ordered by title), so the rail and the rows cannot drift.
+     */
+    private fun updateAzRail() {
+        val trackList = findViewById<RecyclerView>(R.id.track_list)
+        if (activePanel != R.id.track_screen || sortMode != SORT_TITLE) {
+            azScroller.setIndex(emptyList())
+            // Give the rows their edge back: with the rail hidden, 34dp of dead space on
+            // the right would just be a gap.
+            if (trackList.paddingEnd != 0) {
+                trackList.setPaddingRelative(0, trackList.paddingTop, 0, trackList.paddingBottom)
+            }
+            return
+        }
+        // The rail sits over the right edge of the rows, and the star lives there — without
+        // this, the rail would eat taps meant for the star. Padding is what puts the rows
+        // clear of it (clipToPadding is already off on this list, which only affects
+        // scrolling, not where the rows are laid out).
+        val railWidth = azScroller.resources.getDimensionPixelSize(R.dimen.az_rail_width)
+        if (trackList.paddingEnd != railWidth) {
+            trackList.setPaddingRelative(
+                trackList.paddingStart, trackList.paddingTop, railWidth, trackList.paddingBottom
+            )
+        }
+        val entries = ArrayList<AzScroller.Entry>(26)
+        var last = Char.MIN_VALUE
+        library.forEachIndexed { position, track ->
+            val first = track.title.firstOrNull()?.uppercaseChar()
+            val letter = if (first != null && first in 'A'..'Z') first else '#'
+            // The list is title-ordered, so a letter's rows are contiguous and the first
+            // one is the only one worth an entry.
+            if (letter != last) {
+                entries.add(AzScroller.Entry(letter, position))
+                last = letter
+            }
+        }
+        azScroller.setIndex(entries)
     }
 
     override fun onResume() {
@@ -451,6 +510,14 @@ class MainActivity : AppCompatActivity() {
         // hook its own window attach/detach. Search and playlist panels do the same in
         // their own onAttachedToWindow/onDetachedFromWindow.
         trackAdapter.observeFavourites()
+
+        // A–Z rail: jumping is just a scroll; the rail only reports a row index, because
+        // this Activity is the only place that holds the RecyclerView.
+        azScroller = findViewById(R.id.az_scroller)
+        azScroller.onJump = { position ->
+            (findViewById<RecyclerView>(R.id.track_list).layoutManager as? LinearLayoutManager)
+                ?.scrollToPositionWithOffset(position, 0)
+        }
 
         // Now-playing cue for the track rows, from the single shared controller. Same
         // Activity-lifetime pairing as the Favourites observer above (see onDestroy).
@@ -974,6 +1041,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Show one content view, hide the rest of the top-level panels. */
     private fun show(target: Int) {
+        activePanel = target
         val panels = listOf(
             R.id.track_screen, R.id.album_screen, R.id.folder_panel, R.id.playlist_home,
             R.id.playlist_panel, R.id.search_panel, R.id.queue_panel, R.id.settings_panel
@@ -982,6 +1050,8 @@ class MainActivity : AppCompatActivity() {
             val v: View = findViewById(id)
             v.visibility = if (id == target) View.VISIBLE else View.GONE
         }
+        // The rail belongs to one panel: refresh it now that a different one is up.
+        updateAzRail()
         // Keep the strip in step with the content. playlist_panel is the Lists tab's own
         // detail screen, so opening a playlist leaves that tab lit.
         PANEL_TABS[target]?.let { highlightTab(it) }
