@@ -91,6 +91,19 @@ class FolderPanel @JvmOverloads constructor(
     }
 
     /**
+     * Jump straight to [path] — a directory somewhere under [root]. This is how "Show in
+     * folder" arrives from an album or a track's info sheet: the whole tree is already in
+     * memory, so a jump is one level change and a rebuild, exactly like the breadcrumb
+     * does it. A path outside the tree is not thrown at the list: it falls back to the
+     * root, which is at least a place the user can walk from.
+     */
+    fun openPath(path: String) {
+        current = if (path.startsWith(root)) path else root
+        refresh()
+        listView.scrollToPosition(0)
+    }
+
+    /**
      * MediaStore id of the track the shared player holds, or null. Pushed down by the
      * host (the same value the track list gets); folder rows are not affected.
      */

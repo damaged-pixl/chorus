@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
@@ -130,7 +133,67 @@ object Art {
         }
     }
 
-    private fun decode(ctx: Context, uri: Uri, targetPx: Int, lowMem: Boolean): Bitmap? {
+    /**
+     * A square cover built from up to four album-art URIs — the playlist's own look, so a
+     * playlist reads as a mix rather than as whichever album its first track happens to
+     * belong to.
+     *
+     * Blocking, and deliberately so: it runs on the library-load worker while a playlist
+     * row's cover is being rebuilt, where there is nothing to wait for but the decodes.
+     * Nothing on a bind path may call it — rows still get their art through [load].
+     *
+     * Four tiles lay out 2x2, three leave the fourth quadrant to the first tile again,
+     * two split the square, one fills it. Each tile is centre-cropped into its quadrant,
+     * so a tall cover is not squashed into a square. The tiles are thrown away afterwards:
+     * they never touch the cache, so nothing else can be holding them.
+     */
+    fun mosaicBlocking(ctx: Context, uris: List<Uri>, tilePx: Int, outPx: Int): Bitmap? {
+        val appContext = ctx.applicationContext
+        val tiles = uris.take(4).mapNotNull { decode(appContext, it, tilePx, true, software = true) }
+        if (tiles.isEmpty()) return null
+        return try {
+            val out = Bitmap.createBitmap(outPx, outPx, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(out)
+            // One pixel of overlap between quadrants: two tiles meeting on an exact
+            // boundary leave a hairline seam if the scale lands either side of it.
+            val half = outPx / 2f + 1f
+            // One tile fills the square, not a corner of it — that case is a playlist
+            // whose tracks all share an album, and it is the common one.
+            val quad = if (tiles.size == 1) outPx.toFloat() else half
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            val origins = when (tiles.size) {
+                1 -> listOf(0f to 0f)
+                2 -> listOf(0f to 0f, half to 0f)
+                3 -> listOf(0f to 0f, half to 0f, 0f to half, half to half)
+                else -> listOf(0f to 0f, half to 0f, 0f to half, half to half)
+            }
+            origins.forEachIndexed { i, (left, top) ->
+                val tile = tiles[i % tiles.size]
+                val dst = RectF(left, top, minOf(left + quad, outPx.toFloat()), minOf(top + quad, outPx.toFloat()))
+                val scale = maxOf(dst.width() / tile.width, dst.height() / tile.height)
+                val w = tile.width * scale
+                val h = tile.height * scale
+                val dx = left + (dst.width() - w) / 2f
+                val dy = top + (dst.height() - h) / 2f
+                canvas.drawBitmap(tile, null, RectF(dx, dy, dx + w, dy + h), paint)
+            }
+            out
+        } finally {
+            // Tiles are private to this call (never cached), so dropping them here is the
+            // only thing that keeps a rebuild from leaking four bitmaps per playlist.
+            tiles.forEach { it.recycle() }
+        }
+    }
+
+    /**
+     * [software] forces a software-configured bitmap out of ImageDecoder. Only the mosaic
+     * needs that: a hardware bitmap cannot be drawn onto a software Canvas, and compositing
+     * tiles into one square is exactly that. List and widget paths leave it off — they hand
+     * the bitmap straight to a view, which is where hardware bitmaps belong.
+     */
+    private fun decode(
+        ctx: Context, uri: Uri, targetPx: Int, lowMem: Boolean, software: Boolean = false
+    ): Bitmap? {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 // A plain open — deliberately NOT loadThumbnail(). With no EXTRA_SIZE
@@ -144,6 +207,7 @@ object Art {
                     // LOW_RAM lets the decoder use RGB_565 for opaque images — the
                     // memory budget for list thumbnails (full quality stays default).
                     if (lowMem) decoder.setMemorySizePolicy(ImageDecoder.MEMORY_POLICY_LOW_RAM)
+                    if (software) decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE)
                     var sample = 1
                     while (info.size.width / sample > targetPx || info.size.height / sample > targetPx) {
                         sample *= 2

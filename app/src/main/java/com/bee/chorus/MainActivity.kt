@@ -33,7 +33,9 @@ import com.bee.chorus.data.PlaylistStore
 import com.bee.chorus.data.Settings
 import com.bee.chorus.data.Track
 import com.bee.chorus.playback.PlayerHolder
+import android.graphics.Bitmap
 import com.bee.chorus.ui.AlbumAdapter
+import com.bee.chorus.ui.Art
 import com.bee.chorus.ui.AzScroller
 import com.bee.chorus.ui.CycleMode
 import com.bee.chorus.ui.CycleToggle
@@ -86,6 +88,21 @@ class MainActivity : AppCompatActivity() {
     private var albums: List<Album> = emptyList()
 
     private val io = Executors.newSingleThreadExecutor()
+
+    /**
+     * Run [block] on the library thread, and ignore the call once this screen is gone.
+     *
+     * A `runOnUiThread` posted from a background task can land *after* onDestroy has shut
+     * the executor down: the screen is gone, the work is not wanted any more, and letting
+     * the pool reject it turns a finished screen into a crash. That is a real sequence —
+     * the library load posts its last UI update just as an install or a permission churn
+     * tears the Activity down. One guard here means every submission is safe, instead of
+     * a dozen call sites each remembering to check.
+     */
+    private fun runIo(block: () -> Unit) {
+        if (io.isShutdown) return
+        io.execute { block() }
+    }
     private var cycle = false
 
     // Tab strip: the six buttons plus the accent underline that sits under the selected one.
@@ -108,6 +125,13 @@ class MainActivity : AppCompatActivity() {
     // shipped with; the others are the same one bar, the same way the Tracks tab works.
     private var albumSort = ALBUM_SORT_ARTIST
     private lateinit var albumSortButtons: List<TextView>
+
+    /**
+     * Playlist cover bitmaps, keyed by playlist id, each beside the signature (its first
+     * few track ids) it was built from — so a revisit only rebuilds what changed. Holds
+     * row-sized bitmaps only, and drops a playlist's entry when the playlist goes.
+     */
+    private val coverCache = HashMap<Long, Pair<String, Bitmap>>()
 
     // A–Z jump rail over the track list, and the panel the screen is currently on (the
     // rail belongs to one panel only, so it needs to know which one is up).
@@ -224,7 +248,7 @@ class MainActivity : AppCompatActivity() {
     // ---------- data ----------
 
     private fun loadLibrary() {
-        io.execute {
+        runIo {
             val reader = LibraryReader(this)
             val tracks = reader.loadTracks()
             val albums = reader.loadAlbums(tracks)
@@ -243,11 +267,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshPlaylists() {
+        // Same window as runIo's guard: this method is reached from a posted update, so
+        // it has to answer for itself where the executor is concerned.
+        if (io.isShutdown) return
         val list = io.submit<List<Pair<Long, String>>> { store.listPlaylists() }
-        io.execute {
+        runIo {
             val res = list.get()
+            val covers = buildPlaylistCovers(res)
             runOnUiThread {
                 playlistAdapter.submit(res)
+                playlistAdapter.setCovers(covers)
                 // One-line empty state centred over the list. Playlists live in our
                 // own DB (not MediaStore), so the state is accurate immediately.
                 findViewById<View>(R.id.playlist_empty).visibility =
@@ -366,7 +395,7 @@ class MainActivity : AppCompatActivity() {
                 trackAdapter.submit(library)
                 updateAzRail()
             }
-            else -> io.execute {
+            else -> runIo {
                 val stats = store.playStats()
                 // Unplayed tracks (0 / never) sort last; ties break A–Z for a stable list.
                 // The tie-break uses CASE_INSENSITIVE_ORDER rather than `lowercase()`:
@@ -484,12 +513,7 @@ class MainActivity : AppCompatActivity() {
             setHasFixedSize(true)
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = albumAdapter
-            albumAdapter.onLongClick = { album ->
-                // Same ordering the click-to-play uses, so the playlist matches play order.
-                addToPlaylistDialog(
-                    library.filter { it.albumId == album.id }.sortedBy { it.trackNo }
-                )
-            }
+            albumAdapter.onLongClick = { album -> albumOptionsDialog(album) }
         }
         findViewById<RecyclerView>(R.id.playlist_list).apply {
             setRecycledViewPool(sharedViewPool)
@@ -538,7 +562,7 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton("Create") { _, _ ->
                     val name = input.text.toString().trim()
                     if (name.isNotEmpty()) {
-                        io.execute {
+                        runIo {
                             store.createPlaylist(name)
                             runOnUiThread { refreshPlaylists() }
                         }
@@ -554,6 +578,46 @@ class MainActivity : AppCompatActivity() {
         // Folder browser: long-press on a track row gets the same add-to-playlist
         // chooser as every other list (the tap still plays).
         folderPanel.onTrackLongClick = { track -> addToPlaylistDialog(listOf(track)) }
+    }
+
+    /**
+     * A cover mosaic per playlist: the first few tracks' album art, 2x2, exactly as every
+     * other player draws a playlist. Built here on the library-load thread, never on a
+     * bind path — the adapter is handed the finished bitmaps with [PlaylistAdapter.setCovers].
+     *
+     * The signature (which tracks the cover came from) is cached per playlist, so
+     * re-visiting the Lists tab only rebuilds the ones that actually changed. Covers are
+     * sized to the row they live in, which keeps the whole set to a few hundred kilobytes
+     * rather than a few megabytes.
+     */
+    private fun buildPlaylistCovers(
+        playlists: List<Pair<Long, String>>
+    ): Map<Long, Bitmap> {
+        val byId = library.associateBy { it.id }
+        val out = HashMap<Long, Bitmap>(playlists.size)
+        val keep = HashSet<Long>(playlists.size)
+        val size = (PLAYLIST_COVER_DP * resources.displayMetrics.density).toInt().coerceAtLeast(64)
+        for ((id, _) in playlists) {
+            keep.add(id)
+            // Head of the playlist: what the cover always shows, and a signature in one.
+            val ids = store.trackIdsIn(id).take(4)
+            if (ids.isEmpty()) continue
+            val signature = ids.joinToString(",")
+            val cached = coverCache[id]
+            if (cached != null && cached.first == signature) {
+                out[id] = cached.second
+                continue
+            }
+            val uris = ids.mapNotNull { byId[it]?.albumArtUri }
+            if (uris.isEmpty()) continue
+            val mosaic = Art.mosaicBlocking(this, uris, size / 2, size) ?: continue
+            coverCache[id] = signature to mosaic
+            out[id] = mosaic
+        }
+        // A deleted playlist's cover must not outlive it — the cache is the only thing
+        // here that would otherwise hold on to the bitmap for the life of the process.
+        coverCache.keys.retainAll(keep)
+        return out
     }
 
     private fun openPlaylist(id: Long, name: String) {
@@ -573,18 +637,52 @@ class MainActivity : AppCompatActivity() {
      * tracks it represents, so a long-pressed album appends its whole (play-ordered) track set
      * in one go. A "+ New playlist" row at the top creates a playlist and adds to it immediately.
      */
+    /**
+     * Long-press on an album: add its tracks to a playlist, or go and look at where they
+     * physically live. The folder join is here rather than as a control on the Albums tab
+     * because it is a *look*, not a mode — one album, one trip, then back.
+     */
+    private fun albumOptionsDialog(album: Album) {
+        Dialogs.builder(this)
+            .setTitle(album.title)
+            .setItems(arrayOf("Add to playlist", "Show in folder")) { _, which ->
+                // Same ordering the click-to-play uses, so the playlist matches play order.
+                val tracks = library.filter { it.albumId == album.id }.sortedBy { it.trackNo }
+                when (which) {
+                    0 -> addToPlaylistDialog(tracks)
+                    1 -> {
+                        val path = tracks.firstOrNull()?.parentPath
+                        if (path != null) {
+                            show(R.id.folder_panel)
+                            folderPanel.openPath(path)
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .chorusShow()
+    }
+
     private fun addToPlaylistDialog(tracks: List<Track>) {
         if (tracks.isEmpty()) {
             Toast.makeText(this, "No tracks to add", Toast.LENGTH_SHORT).show()
             return
         }
-        io.execute {
+        runIo {
             val existing = store.listPlaylists()
+            val containing = store.playlistsContaining(tracks.map { it.id })
             runOnUiThread {
                 // "0" is the synthetic new-playlist row; 1..n are the real playlists.
                 val labels = ArrayList<String>(existing.size + 1)
                 labels.add("+ New playlist")
-                for ((_, name) in existing) labels.add(name.ifBlank { "Untitled playlist" })
+                for ((id, name) in existing) {
+                    // A tick on the playlists that already hold these tracks. That is the
+                    // whole answer to "where does this track live?" — asked here, in the
+                    // one dialog that is already about a track and its playlists, rather
+                    // than as a second screen to hunt for.
+                    val tick = if (id in containing) "\u2713 " else ""
+                    labels.add(tick + name.ifBlank { "Untitled playlist" })
+                }
 
                 Dialogs.builder(this)
                     .setTitle(
@@ -594,14 +692,32 @@ class MainActivity : AppCompatActivity() {
                     .setItems(labels.toTypedArray()) { _, which ->
                         if (which == 0) createPlaylistThenAdd(tracks)
                         else {
-                            val (id, _) = existing[which - 1]
-                            addTracksTo(id, tracks)
+                            val (id, name) = existing[which - 1]
+                            // Ticking a playlist and then appending to it blindly would
+                            // duplicate a row the tick says is already there, so it is a
+                            // choice: open it, or add again anyway.
+                            if (id in containing) alreadyInDialog(id, name, tracks)
+                            else addTracksTo(id, tracks)
                         }
                     }
                     .setNegativeButton("Cancel", null)
                     .chorusShow()
             }
         }
+    }
+
+    /** The playlist picked already holds these tracks: open it, or append again. */
+    private fun alreadyInDialog(id: Long, name: String, tracks: List<Track>) {
+        Dialogs.builder(this)
+            .setTitle("Already in ${name.ifBlank { "Untitled playlist" }}")
+            .setItems(arrayOf("Open it", "Add it again")) { _, which ->
+                when (which) {
+                    0 -> openPlaylist(id, name)
+                    1 -> addTracksTo(id, tracks)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .chorusShow()
     }
 
     /** Name a new playlist, then add the waiting tracks to it. */
@@ -618,7 +734,7 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Create") { _, _ ->
                 val name = input.text.toString().trim()
                 if (name.isNotEmpty()) {
-                    io.execute {
+                    runIo {
                         val id = store.createPlaylist(name)
                         store.addTracks(id, tracks.map { it.id })
                         runOnUiThread { refreshPlaylists() }
@@ -630,7 +746,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addTracksTo(playlistId: Long, tracks: List<Track>) {
-        io.execute {
+        runIo {
             store.addTracks(playlistId, tracks.map { it.id })
             runOnUiThread {
                 Toast.makeText(
@@ -643,21 +759,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Long-press options for a saved playlist: rename, export to .m3u8, or delete. */
+    /**
+     * Long-press options for a saved playlist: rename, export to .m3u8, sort alphabetically,
+     * or delete.
+     */
     private fun playlistOptionsDialog(id: Long, name: String) {
         val label = name.ifBlank { "Untitled playlist" }
-        val options = arrayOf("Rename", "Export", "Delete")
+        val options = arrayOf("Rename", "Export", "Sort A\u2013Z", "Delete")
         Dialogs.builder(this)
             .setTitle(label)
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> renamePlaylistDialog(id, label)
                     1 -> startExport(id, label)
-                    2 -> confirmDeletePlaylist(id, label)
+                    2 -> sortPlaylistAZ(id, label)
+                    3 -> confirmDeletePlaylist(id, label)
                 }
             }
             .setNegativeButton("Cancel", null)
             .chorusShow()
+    }
+
+    /**
+     * Rewrite a playlist's order alphabetically. Destructive to a hand-built order, which
+     * is why it lives in the long-press sheet and not as a button on the detail screen:
+     * it is a tidy-up, done once or not at all.
+     *
+     * A track the library no longer knows (a file deleted since) keeps its place at the
+     * end rather than being dropped — sorting is not a reason to lose a row.
+     */
+    private fun sortPlaylistAZ(id: Long, label: String) {
+        runIo {
+            val byId = library.associateBy { it.id }
+            val known = ArrayList<Track>()
+            val gone = ArrayList<Long>()
+            for (trackId in store.trackIdsIn(id)) {
+                val track = byId[trackId]
+                if (track != null) known.add(track) else gone.add(trackId)
+            }
+            val ordered = known.sortedWith(
+                Comparator { a, b -> String.CASE_INSENSITIVE_ORDER.compare(a.title, b.title) }
+            ).map { it.id } + gone
+            store.replaceTracks(id, ordered)
+            runOnUiThread {
+                Toast.makeText(this, "Sorted $label", Toast.LENGTH_SHORT).show()
+                // If that playlist is on screen right now, its rows must follow the order.
+                if (playlistPanel.currentPlaylistId() == id) playlistPanel.refresh()
+            }
+        }
     }
 
     private fun renamePlaylistDialog(id: Long, current: String) {
@@ -668,7 +817,7 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Rename") { _, _ ->
                 val name = input.text.toString().trim()
                 if (name.isNotEmpty()) {
-                    io.execute {
+                    runIo {
                         store.renamePlaylist(id, name)
                         runOnUiThread {
                             refreshPlaylists()
@@ -689,7 +838,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Delete playlist")
             .setMessage("\"$name\" will be removed. The music files stay on this phone.")
             .setPositiveButton("Delete") { _, _ ->
-                io.execute {
+                runIo {
                     store.deletePlaylist(id)
                     runOnUiThread {
                         // If the deleted playlist is on screen, fall back to the list.
@@ -723,7 +872,7 @@ class MainActivity : AppCompatActivity() {
     private fun writeExported(uri: Uri) {
         val (id, name) = pendingExport ?: return
         pendingExport = null
-        io.execute {
+        runIo {
             val byId = HashMap<Long, Track>(library.size)
             for (t in library) byId[t.id] = t
             val tracks = store.trackIdsIn(id).mapNotNull { byId[it] }
@@ -759,7 +908,7 @@ class MainActivity : AppCompatActivity() {
      * it (see `PlaylistStore.playlist_origin`).
      */
     private fun importPlaylist(uri: Uri) {
-        io.execute {
+        runIo {
             val text = try {
                 contentResolver.openInputStream(uri)?.use {
                     it.readBytes().toString(Charsets.UTF_8)
@@ -772,7 +921,7 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, "Couldn't read that playlist file", Toast.LENGTH_SHORT)
                         .show()
                 }
-                return@execute
+                return@runIo
             }
 
             val raw = displayName(uri) ?: "Imported playlist"
@@ -797,7 +946,7 @@ class MainActivity : AppCompatActivity() {
                         this, "No tracks from that playlist are on this phone", Toast.LENGTH_LONG
                     ).show()
                 }
-                return@execute
+                return@runIo
             }
 
             val source = uri.toString()
@@ -879,17 +1028,16 @@ class MainActivity : AppCompatActivity() {
             R.id.tab_folders to R.id.folder_panel,
             R.id.tab_playlists to R.id.playlist_home,
             R.id.tab_search to R.id.search_panel,
-            R.id.tab_queue to R.id.queue_panel,
             R.id.tab_settings to R.id.settings_panel
         )
-        // The accent underline that sits under whichever tab is selected.
+        // The accent underline that sits under whichever tab is selected. Six tabs: the
+        // queue dropped out of the strip once it became reachable from the player.
         val indicators = mapOf(
             R.id.tab_tracks to R.id.tab_indicator_tracks,
             R.id.tab_albums to R.id.tab_indicator_albums,
             R.id.tab_folders to R.id.tab_indicator_folders,
             R.id.tab_playlists to R.id.tab_indicator_playlists,
             R.id.tab_search to R.id.tab_indicator_search,
-            R.id.tab_queue to R.id.tab_indicator_queue,
             R.id.tab_settings to R.id.tab_indicator_settings
         )
 
@@ -1099,6 +1247,9 @@ class MainActivity : AppCompatActivity() {
         const val SORT_PLAYS = 1
         const val SORT_RECENT = 2
 
+        /** Edge of a playlist row's cover in dp; its mosaic tiles are half that. */
+        const val PLAYLIST_COVER_DP = 44
+
         /** Album sort modes; index into [albumSortButtons]. */
         const val ALBUM_SORT_TITLE = 0
         const val ALBUM_SORT_ARTIST = 1
@@ -1126,7 +1277,9 @@ class MainActivity : AppCompatActivity() {
             R.id.playlist_home to R.id.tab_playlists,
             R.id.playlist_panel to R.id.tab_playlists,
             R.id.search_panel to R.id.tab_search,
-            R.id.queue_panel to R.id.tab_queue,
+            // Deliberately no entry for queue_panel: the queue has no tab, so showing it
+            // (only ever from the player's queue pill) leaves whichever tab was lit as it
+            // was. PANEL_TABS[target] is read with `?.`, so a missing key is a no-op.
             R.id.settings_panel to R.id.tab_settings
         )
 

@@ -206,6 +206,25 @@ class PlaylistStore(context: Context) :
         return out
     }
 
+    /**
+     * Ids of the playlists that already hold at least one of [trackIds] — the reverse of
+     * [trackIdsIn], and the answer to "where does this track live?".
+     *
+     * One query with an IN clause rather than a query per playlist: the album long-press
+     * hands over every track on the album, so per-playlist queries would grow with both
+     * sides at once.
+     */
+    fun playlistsContaining(trackIds: List<Long>): Set<Long> {
+        if (trackIds.isEmpty()) return emptySet()
+        // Ids come from MediaStore, not from user text, so an IN list needs no escaping.
+        val ids = trackIds.joinToString(",")
+        val out = HashSet<Long>(8)
+        readableDatabase.rawQuery(
+            "SELECT DISTINCT playlist_id FROM playlist_tracks WHERE track_id IN ($ids)", null
+        ).use { c -> while (c.moveToNext()) out.add(c.getLong(0)) }
+        return out
+    }
+
     fun countIn(playlistId: Long): Int {
         readableDatabase.rawQuery(
             "SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id=?", arrayOf(playlistId.toString())

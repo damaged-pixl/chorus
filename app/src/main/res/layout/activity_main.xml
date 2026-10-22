@@ -178,36 +178,6 @@
             android:layout_weight="1">
 
             <Button
-                android:id="@+id/tab_queue"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minWidth="0dp"
-                android:minHeight="48dp"
-                android:paddingStart="2dp"
-                android:paddingEnd="2dp"
-                android:gravity="center"
-                android:singleLine="true"
-                android:textAllCaps="false"
-                android:textSize="13sp"
-                android:text="Queue" />
-
-            <View
-                android:id="@+id/tab_indicator_queue"
-                android:layout_width="20dp"
-                android:layout_height="2dp"
-                android:layout_gravity="bottom|center_horizontal"
-                android:layout_marginBottom="6dp"
-                android:importantForAccessibility="no"
-                android:visibility="gone" />
-        </FrameLayout>
-
-        <FrameLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1">
-
-            <Button
                 android:id="@+id/tab_settings"
                 style="?android:attr/borderlessButtonStyle"
                 android:layout_width="match_parent"
