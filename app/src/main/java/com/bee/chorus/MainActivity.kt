@@ -103,6 +103,11 @@ class MainActivity : AppCompatActivity() {
     private var sortMode = SORT_TITLE
     private lateinit var sortButtons: List<TextView>
 
+    // Album sort. ARTIST is the default so the Albums tab keeps the order it has always
+    // shipped with; the others are the same one bar, the same way the Tracks tab works.
+    private var albumSort = ALBUM_SORT_ARTIST
+    private lateinit var albumSortButtons: List<TextView>
+
     // Sort-bar tints, resolved in wireSortBar() rather than as field initialisers: the
     // theme is not final until onCreate has had its say (CycleMode.applyTheme runs first),
     // and a field initialiser would read the manifest theme instead.
@@ -146,6 +151,7 @@ class MainActivity : AppCompatActivity() {
 
         wireLists()
         wireSortBar()
+        wireAlbumSortBar()
         wireTabs()
         wireCycle()
         wireSettings()
@@ -220,7 +226,7 @@ class MainActivity : AppCompatActivity() {
                 library = tracks
                 this.albums = albums
                 applySort()
-                albumAdapter.submit(albums)
+                applyAlbumSort()
                 searchPanel.setTracks(tracks)
                 folderPanel.setLibrary(tracks)
                 playlistPanel.setLibrary(tracks)
@@ -259,6 +265,73 @@ class MainActivity : AppCompatActivity() {
         sortButtons[SORT_PLAYS].setOnClickListener { setSort(SORT_PLAYS) }
         sortButtons[SORT_RECENT].setOnClickListener { setSort(SORT_RECENT) }
         updateSortBar()
+    }
+
+    // ---------- album sorting ----------
+
+    /** The four buttons of the Albums tab's sort bar, in [albumSort] order. */
+    private fun wireAlbumSortBar() {
+        albumSortButtons = listOf(
+            findViewById(R.id.album_sort_title),
+            findViewById(R.id.album_sort_artist),
+            findViewById(R.id.album_sort_year),
+            findViewById(R.id.album_sort_added)
+        )
+        albumSortButtons[ALBUM_SORT_TITLE].setOnClickListener { setAlbumSort(ALBUM_SORT_TITLE) }
+        albumSortButtons[ALBUM_SORT_ARTIST].setOnClickListener { setAlbumSort(ALBUM_SORT_ARTIST) }
+        albumSortButtons[ALBUM_SORT_YEAR].setOnClickListener { setAlbumSort(ALBUM_SORT_YEAR) }
+        albumSortButtons[ALBUM_SORT_ADDED].setOnClickListener { setAlbumSort(ALBUM_SORT_ADDED) }
+        updateAlbumSortBar()
+    }
+
+    private fun setAlbumSort(mode: Int) {
+        if (mode == albumSort) return
+        albumSort = mode
+        applyAlbumSort()
+    }
+
+    /** Highlight the active album sort; the rest stay at the muted secondary ink. */
+    private fun updateAlbumSortBar() {
+        for (i in albumSortButtons.indices) {
+            albumSortButtons[i].setTextColor(
+                if (i == albumSort) sortActiveColor else sortIdleColor
+            )
+        }
+    }
+
+    /**
+     * Submit the album list in the current order. Everything sorts in memory — the
+     * library is already loaded — so switching is one comparison pass, no query.
+     *
+     * Ties break A–Z, and the tie-break runs once per comparison with
+     * CASE_INSENSITIVE_ORDER rather than `lowercase()` (the track list learned that
+     * lesson the hard way: two new Strings per comparison).
+     */
+    private fun applyAlbumSort() {
+        updateAlbumSortBar()
+        val sorted = when (albumSort) {
+            // An explicit comparator: the (comparator, selector) overload of compareBy
+            // has two type parameters, so the type has nowhere to come from inside
+            // sortedWith — and CASE_INSENSITIVE_ORDER is what keeps "a" next to "A".
+            ALBUM_SORT_TITLE -> albums.sortedWith(
+                Comparator { a, b -> String.CASE_INSENSITIVE_ORDER.compare(a.title, b.title) }
+            )
+            ALBUM_SORT_YEAR -> albums.sortedWith(
+                compareByDescending<Album> { it.year.coerceAtLeast(0) }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            )
+            ALBUM_SORT_ADDED -> albums.sortedWith(
+                compareByDescending<Album> { it.dateAdded }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            )
+            // ARTIST: the album artist where MediaStore has one, first track's otherwise.
+            else -> albums.sortedWith(
+                Comparator<Album> { a, b ->
+                    String.CASE_INSENSITIVE_ORDER.compare(a.artist, b.artist)
+                }.thenBy { it.year.coerceAtLeast(0) }
+            )
+        }
+        albumAdapter.submit(sorted)
     }
 
     private fun setSort(mode: Int) {
@@ -735,7 +808,7 @@ class MainActivity : AppCompatActivity() {
             // track_screen (sort bar + list) is shown as one unit, so the screen id —
             // not the bare RecyclerView — is what the tab strip switches between.
             R.id.tab_tracks to R.id.track_screen,
-            R.id.tab_albums to R.id.album_list,
+            R.id.tab_albums to R.id.album_screen,
             R.id.tab_folders to R.id.folder_panel,
             R.id.tab_playlists to R.id.playlist_home,
             R.id.tab_search to R.id.search_panel,
@@ -902,7 +975,7 @@ class MainActivity : AppCompatActivity() {
     /** Show one content view, hide the rest of the top-level panels. */
     private fun show(target: Int) {
         val panels = listOf(
-            R.id.track_screen, R.id.album_list, R.id.folder_panel, R.id.playlist_home,
+            R.id.track_screen, R.id.album_screen, R.id.folder_panel, R.id.playlist_home,
             R.id.playlist_panel, R.id.search_panel, R.id.queue_panel, R.id.settings_panel
         )
         for (id in panels) {
@@ -956,6 +1029,12 @@ class MainActivity : AppCompatActivity() {
         const val SORT_PLAYS = 1
         const val SORT_RECENT = 2
 
+        /** Album sort modes; index into [albumSortButtons]. */
+        const val ALBUM_SORT_TITLE = 0
+        const val ALBUM_SORT_ARTIST = 1
+        const val ALBUM_SORT_YEAR = 2
+        const val ALBUM_SORT_ADDED = 3
+
         /** How Android classifies .m3u/.m3u8 — export document type and import filter. */
         const val M3U_MIME = "audio/x-mpegurl"
 
@@ -972,7 +1051,7 @@ class MainActivity : AppCompatActivity() {
         /** Panel shown -> the tab that owns it. Drives the tab strip's selected state. */
         val PANEL_TABS = mapOf(
             R.id.track_screen to R.id.tab_tracks,
-            R.id.album_list to R.id.tab_albums,
+            R.id.album_screen to R.id.tab_albums,
             R.id.folder_panel to R.id.tab_folders,
             R.id.playlist_home to R.id.tab_playlists,
             R.id.playlist_panel to R.id.tab_playlists,

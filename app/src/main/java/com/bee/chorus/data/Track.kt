@@ -15,6 +15,9 @@ data class Track(
     val durationMs: Int,
     val trackNo: Int,
     val year: Int,
+    // MediaStore DATE_ADDED (seconds since epoch). "Recently added" on the Albums tab
+    // sorts from it; defaulted to 0 because the queue restore builds partial tracks.
+    val dateAdded: Long = 0,
     // Absolute file path from MediaStore's DATA column. Playback still goes through the
     // content:// URI ([uri]); the path is kept only for the folder browser and M3U
     // import/export, which need to know (and match) where a file actually lives.
@@ -31,9 +34,12 @@ data class Track(
 data class Album(
     val id: Long,
     val title: String,
+    /** The album-level artist where MediaStore has one, else the first track's. */
     val artist: String,
     val year: Int,
-    val trackCount: Int
+    val trackCount: Int,
+    // Newest file in the album (MediaStore DATE_ADDED, seconds). 0 when unknown.
+    val dateAdded: Long = 0
 ) : Parcelable {
     val artUri: Uri get() = ContentUris.withAppendedId(Library.ALBUM_ART_URI, id)
 }
