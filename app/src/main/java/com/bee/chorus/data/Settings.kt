@@ -10,7 +10,9 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  * The *user settings* are [KEY_CYCLE_MODE] (the big-target, high-contrast layout),
  * [KEY_REPLAYGAIN_MODE] (off / track / album), [KEY_RESUME_POSITION] (reopen where you
- * left off) and [KEY_DEFAULT_SHUFFLE] (start every session shuffled).
+ * left off), [KEY_DEFAULT_SHUFFLE] (start every session shuffled), [KEY_SKIP_SECONDS]
+ * (how far the skip buttons jump), [KEY_PLAY_ON_CONNECT] (start on headphones/Bluetooth)
+ * and [KEY_RESTORE_ON_BOOT] (bring the queue back after a reboot).
  *
  * Listeners registered via [addListener] are process-wide and fire on every [setCycleMode]
  * call, so a host can react (re-theme, relayout) without polling. They are held strongly:
@@ -36,6 +38,19 @@ object Settings {
 
     private const val KEY_DEFAULT_SHUFFLE = "default_shuffle"
     private const val DEFAULT_DEFAULT_SHUFFLE = false
+
+    // How far the player's own skip buttons jump. In seconds because that is the unit
+    // the row says; clamped on read so a hand-edited value cannot walk it off the
+    // screen's three choices (or make a tap jump past the end of a track).
+    private const val KEY_SKIP_SECONDS = "skip_seconds"
+    private const val DEFAULT_SKIP_SECONDS = 10
+    private val SKIP_CHOICES = intArrayOf(5, 10, 15)
+
+    private const val KEY_PLAY_ON_CONNECT = "play_on_connect"
+    private const val DEFAULT_PLAY_ON_CONNECT = false
+
+    private const val KEY_RESTORE_ON_BOOT = "restore_queue_on_boot"
+    private const val DEFAULT_RESTORE_ON_BOOT = false
 
     private const val KEY_SPEED = "playback_speed"
     private const val DEFAULT_SPEED = 1f
@@ -118,6 +133,56 @@ object Settings {
 
     fun setResumePosition(ctx: Context, on: Boolean) {
         prefs(ctx).edit().putBoolean(KEY_RESUME_POSITION, on).apply()
+    }
+
+    // ------------------------------------------------------------------ skip distance
+
+    /**
+     * How far the player's rewind/forward buttons jump, in seconds — 5, 10 or 15.
+     *
+     * Read per tap rather than cached with a listener: it is one SharedPreferences hit
+     * on a path that is already talking to the player, and the alternative is a listener
+     * the player panel would have to remove in its own lifecycle for a number this small.
+     */
+    fun skipSeconds(ctx: Context): Int {
+        val stored = prefs(ctx).getInt(KEY_SKIP_SECONDS, DEFAULT_SKIP_SECONDS)
+        return SKIP_CHOICES.firstOrNull { it == stored } ?: DEFAULT_SKIP_SECONDS
+    }
+
+    fun setSkipSeconds(ctx: Context, seconds: Int) {
+        if (seconds !in SKIP_CHOICES) return
+        prefs(ctx).edit().putInt(KEY_SKIP_SECONDS, seconds).apply()
+    }
+
+    // ------------------------------------------------------------------ play on connect
+
+    /**
+     * True when plugging in headphones or pairing a Bluetooth source should start playback
+     * by itself, rather than waiting to be told. Off by default: an app that begins making
+     * noise the moment something connects is exactly the kind of surprise a setting exists
+     * to prevent, and the *headphone out* event already stops playback through Android's
+     * own noisy-broadcast handling — this is the other half of that pairing.
+     */
+    fun playOnConnect(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_PLAY_ON_CONNECT, DEFAULT_PLAY_ON_CONNECT)
+
+    fun setPlayOnConnect(ctx: Context, on: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_PLAY_ON_CONNECT, on).apply()
+    }
+
+    // ------------------------------------------------------------------ restore on boot
+
+    /**
+     * True when a reboot should bring the saved queue back (paused) rather than leaving
+     * the player empty until the app is next opened. Off by default: it starts the
+     * playback service at every boot, which is a service someone may not want running
+     * before they have touched the phone.
+     */
+    fun restoreOnBoot(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_RESTORE_ON_BOOT, DEFAULT_RESTORE_ON_BOOT)
+
+    fun setRestoreOnBoot(ctx: Context, on: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_RESTORE_ON_BOOT, on).apply()
     }
 
     // ------------------------------------------------------------------ default shuffle

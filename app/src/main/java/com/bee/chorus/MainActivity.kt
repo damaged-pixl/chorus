@@ -1143,6 +1143,45 @@ class MainActivity : AppCompatActivity() {
             Settings.setDefaultShuffle(this, checked)
         }
 
+        // Skip distance: how far the player's own skip buttons jump.
+        val skipValue = findViewById<TextView>(R.id.settings_skip_value)
+        fun showSkip() {
+            skipValue.text = getString(R.string.settings_skip_value, Settings.skipSeconds(this))
+        }
+        showSkip()
+        findViewById<View>(R.id.settings_skip).setOnClickListener {
+            val choices = intArrayOf(5, 10, 15)
+            val labels = choices.map { getString(R.string.settings_skip_value, it) }
+                .toTypedArray()
+            val current = choices.indexOf(Settings.skipSeconds(this))
+            // Same shape as the ReplayGain row: a single-choice list that shows what is
+            // selected and closes itself on the pick.
+            var dialog: AlertDialog? = null
+            dialog = Dialogs.builder(this)
+                .setTitle(R.string.settings_skip_title)
+                .setSingleChoiceItems(labels, current) { _, which ->
+                    Settings.setSkipSeconds(this, choices[which])
+                    showSkip()
+                    dialog?.dismiss()
+                }
+                .setNegativeButton("Cancel", null)
+                .chorusShow()
+        }
+
+        // Play on connect: plug in headphones or pair Bluetooth and it starts.
+        val connectSwitch = findViewById<SwitchCompat>(R.id.settings_connect_switch)
+        connectSwitch.isChecked = Settings.playOnConnect(this)
+        connectSwitch.setOnCheckedChangeListener { _, checked ->
+            Settings.setPlayOnConnect(this, checked)
+        }
+
+        // Restore after reboot: the queue comes back paused rather than empty.
+        val bootSwitch = findViewById<SwitchCompat>(R.id.settings_boot_switch)
+        bootSwitch.isChecked = Settings.restoreOnBoot(this)
+        bootSwitch.setOnCheckedChangeListener { _, checked ->
+            Settings.setRestoreOnBoot(this, checked)
+        }
+
         // Rescan: read the phone's music library again, in case files have changed.
         findViewById<View>(R.id.settings_rescan).setOnClickListener {
             loadLibrary()

@@ -1,7 +1,11 @@
 package com.bee.chorus.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import androidx.core.app.TaskStackBuilder
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -133,6 +137,13 @@ class PlaybackService : MediaSessionService() {
 
         // A ReplayGain mode change is applied to the current track straight away.
         Settings.addReplayGainListener(gainModeListener)
+
+        // Play on connect. Seeded from the outputs already present, so the first callback
+        // restating them cannot be read as a fresh plug-in. A null handler means "on the
+        // calling thread's looper", which in onCreate is the main one.
+        listenConnected = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .any { isListenDevice(it) }
+        audioManager.registerAudioDeviceCallback(deviceCallback, null)
     }
 
     /**
@@ -259,6 +270,93 @@ class PlaybackService : MediaSessionService() {
         player.prepare()
     }
 
+    // ------------------------------------------------------------------ play on connect
+
+    private val audioManager by lazy {
+        getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+
+    /**
+     * True when something you would put on your ears is the current output.
+     *
+     * This is a *history* flag, not a fact: seeded from what is already connected when the
+     * service starts and kept in step on every device callback, so play-on-connect can be
+     * decided from a transition (nothing -> something) instead of from a device merely
+     * being present. Without that, the first callback after registration — which restates
+     * the current set — would count as a plug-in, and a Bluetooth source that never
+     * disconnected would re-trigger on every unrelated output change.
+     */
+    private var listenConnected = false
+
+    /**
+     * Play on connect, via [AudioDeviceCallback] rather than a broadcast.
+     *
+     * A callback needs no permission and covers wired and Bluetooth outputs alike, which
+     * ACTION_HEADSET_PLUG (wired only, and never deliverable to a manifest receiver) does
+     * not. The honest limit: this only hears a connection while the service is alive — a
+     * cold process cannot notice a headset, and waking a dead app into a notification
+     * just because headphones appeared would be a bigger surprise than the setting removes.
+     */
+    private val deviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) = devicesChanged()
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) = devicesChanged()
+    }
+
+    private fun devicesChanged() {
+        val connected = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            .any { isListenDevice(it) }
+        val rose = connected && !listenConnected
+        listenConnected = connected
+        if (rose) maybePlayOnConnect()
+    }
+
+    /** A device you would put on your ears — the outputs the setting is about. */
+    private fun isListenDevice(info: AudioDeviceInfo): Boolean = when (info.type) {
+        AudioDeviceInfo.TYPE_WIRED_HEADSET,
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+        AudioDeviceInfo.TYPE_USB_HEADSET,
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+        AudioDeviceInfo.TYPE_HEARING_AID,
+        AudioDeviceInfo.TYPE_BLE_HEADSET -> true
+        else -> false
+    }
+
+    /**
+     * Start playback when a listen device appears — the mirror of the becoming-noisy pause
+     * that stops it when one goes away (ExoPlayer's `handleAudioBecomingNoisy`), and the
+     * whole of what "play on connect" means.
+     *
+     * Guarded three ways: the setting itself, something actually loaded (an empty player is
+     * not an invitation to try), and not already playing (switching output mid-track must
+     * not restart anything). A deliberately paused queue *is* started — that is the feature.
+     */
+    private fun maybePlayOnConnect() {
+        if (!Settings.playOnConnect(this)) return
+        val player = mediaSession?.player ?: return
+        if (player.mediaItemCount == 0 || player.isPlaying) return
+        player.play()
+    }
+
+    /**
+     * The boot receiver starts us with [ACTION_RESTORE_ON_BOOT] so that a restore with
+     * nothing saved can stop itself straight away: `startForegroundService` expects a
+     * foreground service within a few seconds, and a service whose queue came back empty
+     * has no notification to show (Media3 shows one only for a non-empty timeline). Stopping
+     * first is the documented way out of that deadline. Every other start — media button,
+     * controller connection, the app itself — is Media3's to handle as usual.
+     */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_RESTORE_ON_BOOT &&
+            mediaSession?.player?.mediaItemCount == 0
+        ) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
     /**
      * PendingIntent for the media notification's tap target ([PlayerActivity]).
      *
@@ -292,6 +390,8 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         // Settings holds listeners strongly: unhook before the service goes away.
         Settings.removeReplayGainListener(gainModeListener)
+        // Same reasoning, and the same pairing: one registration in onCreate, one removal here.
+        audioManager.unregisterAudioDeviceCallback(deviceCallback)
         // Final queue snapshot first, while the player still holds real state: a debounced
         // save pending when the service dies would otherwise be lost with the Handler.
         persistHandler.removeCallbacks(persistQueue)
@@ -317,6 +417,14 @@ class PlaybackService : MediaSessionService() {
         // never-opened SQLiteOpenHelper is a no-op, so this needs no guard.
         statsStore.close()
         super.onDestroy()
+    }
+
+    companion object {
+        /**
+         * Action the boot receiver starts the service with, so [onStartCommand] can tell a
+         * queue restore from every other start. Not a media action: Media3 ignores it.
+         */
+        const val ACTION_RESTORE_ON_BOOT = "com.bee.chorus.action.RESTORE_ON_BOOT"
     }
 
     private object DaemonThreadFactory : ThreadFactory {

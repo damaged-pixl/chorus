@@ -32,6 +32,7 @@ import com.bee.chorus.MainActivity
 import com.bee.chorus.R
 import com.bee.chorus.data.Favourites
 import com.bee.chorus.data.Library
+import com.bee.chorus.data.Settings
 import com.bee.chorus.lyrics.LyricsLoader
 import com.bee.chorus.playback.PlayerHolder
 import com.bee.chorus.playback.SleepTimer
@@ -897,15 +898,20 @@ class PlayerPanel @JvmOverloads constructor(
             }
         }
 
+        // Read per tap, not cached: it is one preferences hit on a path already talking
+        // to the player, and it means the Setup tab's choice takes effect on the very
+        // next press with no listener to register or remember to remove.
         rewindButton.setOnClickListener {
+            val skipMs = Settings.skipSeconds(context) * 1000L
             PlayerHolder.whenReady { player ->
-                player.seekTo((player.currentPosition - SKIP_MS).coerceAtLeast(0L))
+                player.seekTo((player.currentPosition - skipMs).coerceAtLeast(0L))
             }
         }
 
         forwardButton.setOnClickListener {
+            val skipMs = Settings.skipSeconds(context) * 1000L
             PlayerHolder.whenReady { player ->
-                val target = player.currentPosition + SKIP_MS
+                val target = player.currentPosition + skipMs
                 val duration = player.duration
                 val bounded = if (duration != C.TIME_UNSET && duration > 0L) {
                     target.coerceAtMost(duration)
@@ -1078,6 +1084,7 @@ class PlayerPanel @JvmOverloads constructor(
         const val LUMINANCE_PIVOT = 0.5f
         const val INK = 0xFF101014.toInt()
 
+        /** Default skip distance, in ms. The live value comes from [Settings.skipSeconds]. */
         const val SKIP_MS = 10_000L
         const val TICK_MS = 500L
         const val FADE_MS = 180L

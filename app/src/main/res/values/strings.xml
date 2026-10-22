@@ -13,6 +13,10 @@ Built on AndroidX (core, appcompat, RecyclerView) and Media3, all under the Apac
 
 Chorus itself is free software under the GNU General Public License v3. You can read the licence below, and the full source is in the repository.</string>
 
+    <!-- The Setup tab's skip-distance choice. %1$d is the distance in seconds. -->
+    <string name="settings_skip_title">Skip distance</string>
+    <string name="settings_skip_value">%1$ds</string>
+
     <!-- Shown if the licence text cannot be read from res/raw. -->
     <string name="about_licence_missing">The licence text could not be read from this build.</string>
 </resources>

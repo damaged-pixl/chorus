@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- "Restore queue after reboot": a normal permission the user never sees asked for,
+         and only ever acted on when the matching setting is on. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Media3 declares this transitively for streaming. We only ever play local
          files, so remove it — nothing here touches the network. -->
@@ -60,6 +63,18 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_player_info" />
+        </receiver>
+
+        <!-- "Restore queue after reboot", opt-in. Not exported: BOOT_COMPLETED is a system
+             broadcast and a non-exported receiver still receives those, so only the system
+             (and this app) can ever reach it. -->
+        <receiver
+            android:name=".playback.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
         </receiver>
     </application>
 </manifest>
