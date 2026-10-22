@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Queue: three rows, each a bullet and a line — a list of what is playing next.
+
+  Drawn rather than the "≡" glyph it replaces, and deliberately different from
+  ic_lyrics: that one is four lines of text with no bullets, this one is three rows
+  with them. Both read as "a list", but only this one is the queue.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M4.5,6.5 h1.6 M4.5,12 h1.6 M4.5,17.5 h1.6"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="2" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M9,6.5 H20 M9,12 H20 M9,17.5 H16"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="2" />
+</vector>

@@ -245,13 +245,29 @@
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:clickable="true"
                 android:contentDescription="Lyrics hidden, tap to show"
                 android:focusable="true"
                 android:scaleType="center"
                 android:src="@drawable/ic_lyrics"
+                android:tint="?attr/chorusPlayerTextMuted" />
+
+            <!-- Queue: opens the queue on the main screen. The full-screen player has no
+                 queue of its own — the queue is one shared list over the single
+                 controller — so this is a way out to it rather than a second view. -->
+            <ImageView
+                android:id="@+id/player_queue"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="8dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:contentDescription="Show the queue"
+                android:focusable="true"
+                android:scaleType="center"
+                android:src="@drawable/ic_queue"
                 android:tint="?attr/chorusPlayerTextMuted" />
 
             <TextView
@@ -368,10 +384,17 @@
                 android:src="@drawable/ic_star"
                 android:tint="?attr/chorusPlayerTextMuted" />
 
-            <!-- The countdown ("14:32") lives in this pill, behind a clock icon; end-of-track
-                 mode reads "End of track" and ellipsises on a narrow screen, which is why
-                 every mode label keeps its content description as the authoritative wording. -->
-            <TextView
+            <!-- The sleep pill: a clock, plus the countdown ("14:32") beside it; end-of-track
+                 mode reads "End of track" and ellipsises on a narrow screen, which is why the
+                 content description is the authoritative wording.
+
+                 It is a group rather than one label with a compound drawable, because a
+                 compound drawable is pinned to the *start* of the text — with no countdown
+                 yet, the clock was drawn hard against the pill's left edge instead of in its
+                 middle. A centred group puts the clock in the middle when the label is gone
+                 (PlayerPanel hides an empty label) and lets icon and text travel together
+                 when it is not. -->
+            <LinearLayout
                 android:id="@+id/player_sleep"
                 android:layout_width="0dp"
                 android:layout_height="52dp"
@@ -379,16 +402,30 @@
                 android:layout_weight="1"
                 android:clickable="true"
                 android:contentDescription="Sleep timer off, tap to set"
-                android:drawableStart="@drawable/ic_sleep"
-                android:drawablePadding="5dp"
-                android:drawableTint="?attr/chorusPlayerTextMuted"
-                android:ellipsize="end"
                 android:focusable="true"
                 android:gravity="center"
-                android:maxLines="1"
-                android:singleLine="true"
-                android:textColor="?attr/chorusPlayerTextMuted"
-                android:textSize="13sp" />
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/player_sleep_icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:importantForAccessibility="no"
+                    android:scaleType="center"
+                    android:src="@drawable/ic_sleep"
+                    android:tint="?attr/chorusPlayerTextMuted" />
+
+                <TextView
+                    android:id="@+id/player_sleep_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="?attr/chorusPlayerTextMuted"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

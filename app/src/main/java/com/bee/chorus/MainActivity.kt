@@ -1,6 +1,7 @@
 package com.bee.chorus
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.net.Uri
@@ -38,6 +39,7 @@ import com.bee.chorus.ui.CycleToggle
 import com.bee.chorus.ui.Dialogs
 import com.bee.chorus.ui.FolderPanel
 import com.bee.chorus.ui.MiniPlayer
+import com.bee.chorus.ui.PlayerPanel
 import com.bee.chorus.ui.PlaylistAdapter
 import com.bee.chorus.ui.PlaylistPanel
 import com.bee.chorus.ui.QueuePanel
@@ -153,6 +155,26 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (hasAudioPermission()) loadLibrary() else requestAudio()
+
+        // Opened from the full-screen player's queue pill: land on the queue tab. Here and
+        // in onNewIntent, because the player may fire this at an already-alive screen.
+        if (intent?.getBooleanExtra(EXTRA_OPEN_QUEUE, false) == true) {
+            show(R.id.queue_panel)
+        }
+    }
+
+    /**
+     * The player's queue pill hands back here. The flag pair in PlayerPanel
+     * (CLEAR_TOP + SINGLE_TOP) routes the intent to the *existing* screen rather than
+     * stacking a second one, so this is the path that runs when the main screen is
+     * already alive behind the player.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_OPEN_QUEUE, false)) {
+            show(R.id.queue_panel)
+        }
     }
 
     // ---------- permissions ----------
@@ -921,7 +943,14 @@ class MainActivity : AppCompatActivity() {
         io.shutdown()
     }
 
-    private companion object {
+    internal companion object {
+        /**
+         * Intent extra: open this screen on its queue tab. Set by the full-screen player's
+         * queue pill. Lives here rather than in PlayerPanel because the *destination*
+         * defines the contract, and PlayerPanel's companion is private.
+         */
+        const val EXTRA_OPEN_QUEUE = "chorus.open_queue"
+
         /** Sort modes for the track list; index into [sortButtons]. */
         const val SORT_TITLE = 0
         const val SORT_PLAYS = 1

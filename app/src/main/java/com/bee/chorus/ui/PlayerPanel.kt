@@ -1,7 +1,9 @@
 package com.bee.chorus.ui
 
+import android.app.Activity
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Outline
@@ -16,6 +18,7 @@ import android.util.AttributeSet
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -25,6 +28,7 @@ import android.widget.TextView
 import androidx.core.graphics.ColorUtils
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import com.bee.chorus.MainActivity
 import com.bee.chorus.R
 import com.bee.chorus.data.Favourites
 import com.bee.chorus.data.Library
@@ -69,8 +73,11 @@ class PlayerPanel @JvmOverloads constructor(
     private val totalView: TextView
     private val speedButton: TextView
     private val lyricsButton: ImageView
+    private val queueButton: ImageView
     private val lyricsPanel: LyricsPanel
-    private val sleepButton: TextView
+    private val sleepButton: ViewGroup
+    private val sleepIcon: ImageView
+    private val sleepLabel: TextView
     private val prevButton: ImageView
     private val rewindButton: ImageView
     private val playPauseButton: ImageView
@@ -98,6 +105,7 @@ class PlayerPanel @JvmOverloads constructor(
     private val sleepOnBg: Drawable
     private val lyricsIdleBg: Drawable
     private val lyricsOnBg: Drawable
+    private val queueIdleBg: Drawable
     private val speedIdleBg: Drawable
 
     // Design tokens, resolved once per inflation. A theme change always arrives as an
@@ -156,8 +164,11 @@ class PlayerPanel @JvmOverloads constructor(
         totalView = findViewById(R.id.player_total)
         speedButton = findViewById(R.id.player_speed)
         lyricsButton = findViewById(R.id.player_lyrics_toggle)
+        queueButton = findViewById(R.id.player_queue)
         lyricsPanel = findViewById(R.id.player_lyrics)
         sleepButton = findViewById(R.id.player_sleep)
+        sleepIcon = findViewById(R.id.player_sleep_icon)
+        sleepLabel = findViewById(R.id.player_sleep_label)
         prevButton = findViewById(R.id.player_prev)
         rewindButton = findViewById(R.id.player_rewind)
         playPauseButton = findViewById(R.id.player_play_pause)
@@ -188,6 +199,7 @@ class PlayerPanel @JvmOverloads constructor(
         sleepOnBg = pill(pillOn, 0)
         lyricsIdleBg = pill(pillIdle, pillBorder)
         lyricsOnBg = pill(pillOn, 0)
+        queueIdleBg = pill(pillIdle, pillBorder)
         speedIdleBg = pill(pillIdle, pillBorder)
 
         styleBackdrop()
@@ -436,10 +448,10 @@ class PlayerPanel @JvmOverloads constructor(
         repeatButton.background = repeatIdleBg
         starButton.background = starIdleBg
         sleepButton.background = sleepIdleBg
+        queueButton.background = queueIdleBg
         tint(shuffleButton, mutedText)
         tint(repeatButton, mutedText)
         tint(starButton, mutedText)
-        sleepButton.setTextColor(mutedText)
         tintSleepClock(mutedText)
     }
 
@@ -451,9 +463,13 @@ class PlayerPanel @JvmOverloads constructor(
         view.imageTintList = ColorStateList.valueOf(color)
     }
 
-    /** The sleep pill is a label with a clock icon beside it, so both need the colour. */
+    /**
+     * The sleep pill is a clock beside a label, so one colour has to reach both — the
+     * label's ink and the icon's tint.
+     */
     private fun tintSleepClock(color: Int) {
-        sleepButton.setCompoundDrawableTintList(ColorStateList.valueOf(color))
+        sleepLabel.setTextColor(color)
+        tint(sleepIcon, color)
     }
 
     /**
@@ -690,8 +706,7 @@ class PlayerPanel @JvmOverloads constructor(
         val armed = mode != SleepTimer.Mode.OFF
         if (armed != lastSleepArmed) {
             lastSleepArmed = armed
-            sleepButton.setBackground(if (armed) sleepOnBg else sleepIdleBg)
-            sleepButton.setTextColor(if (armed) accentText else mutedText)
+            sleepButton.background = if (armed) sleepOnBg else sleepIdleBg
             tintSleepClock(if (armed) accentText else mutedText)
             sleepButton.contentDescription = when (mode) {
                 SleepTimer.Mode.OFF -> "Sleep timer off, tap to set"
@@ -701,14 +716,17 @@ class PlayerPanel @JvmOverloads constructor(
                     "Sleeping at end of track, tap to change or cancel"
             }
         }
-        // The countdown text is rewritten every tick — only its state is worth guarding.
-        // The clock itself is a compound drawable on the label, so it stays put while the
-        // text beside it changes.
-        sleepButton.text = when (mode) {
-            SleepTimer.Mode.OFF -> ""
+        // The countdown is rewritten every tick — only its state is worth guarding. An
+        // empty label is hidden rather than blanked, because a zero-width label next to the
+        // clock shifts the clock off the pill's centre: the centring below is what makes
+        // the clock sit in the middle when there is no countdown yet.
+        val label = when (mode) {
+            SleepTimer.Mode.OFF -> null
             SleepTimer.Mode.COUNTDOWN -> formatTime(SleepTimer.remainingMs())
             SleepTimer.Mode.END_OF_TRACK -> END_OF_TRACK_LABEL
         }
+        if (sleepLabel.text != (label ?: "")) sleepLabel.text = label.orEmpty()
+        sleepLabel.visibility = if (label == null) View.GONE else View.VISIBLE
     }
 
     // ---------------------------------------------------------------- speed
@@ -925,6 +943,24 @@ class PlayerPanel @JvmOverloads constructor(
         sleepButton.setOnClickListener { sleepDialog() }
 
         lyricsButton.setOnClickListener { setLyricsOpen(!lyricsOpen) }
+
+        // Hand back to the main screen's queue tab. The full-screen player has no queue
+        // view of its own (the queue is one list over the shared controller, kept on the
+        // main screen), so this hands the user back rather than duplicating the panel.
+        queueButton.setOnClickListener {
+            (context as? Activity)?.let { activity ->
+                val main = Intent(activity, MainActivity::class.java).apply {
+                    putExtra(MainActivity.EXTRA_OPEN_QUEUE, true)
+                    // Land back on the existing main screen rather than stacking a second
+                    // one behind the player.
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    )
+                }
+                activity.startActivity(main)
+            }
+        }
     }
 
     // ---------------------------------------------------------------- scrub preview
