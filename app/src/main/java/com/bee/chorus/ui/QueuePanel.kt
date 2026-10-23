@@ -33,6 +33,7 @@ class QueuePanel @JvmOverloads constructor(
 
     private val shuffleButton: Button
     private val repeatButton: Button
+    private val clearButton: Button
     private val nowPlaying: TextView
     private val emptyView: TextView
     private val listView: RecyclerView
@@ -63,6 +64,7 @@ class QueuePanel @JvmOverloads constructor(
 
         shuffleButton = findViewById(R.id.queue_shuffle)
         repeatButton = findViewById(R.id.queue_repeat)
+        clearButton = findViewById(R.id.queue_clear)
         nowPlaying = findViewById(R.id.queue_now_playing)
         emptyView = findViewById(R.id.queue_empty)
         listView = findViewById(R.id.queue_list)
@@ -83,6 +85,25 @@ class QueuePanel @JvmOverloads constructor(
         repeatButton.setOnClickListener {
             PlayerHolder.cycleRepeat()
             PlayerHolder.whenReady { c -> renderToggles(c) }
+        }
+
+        clearButton.setOnClickListener {
+            Dialogs.builder(context)
+                .setTitle("Clear the queue?")
+                .setMessage("Every track in the queue will be removed.")
+                .setPositiveButton("Clear all") { _, _ ->
+                    PlayerHolder.whenReady { c ->
+                        // Re-check the count at confirm time: the queue can drain
+                        // (auto-advance, a remove on the lock screen) while the dialog
+                        // is up, and clearing an already-empty player must stay a no-op.
+                        if (c.mediaItemCount > 0) {
+                            c.removeMediaItems(0, c.mediaItemCount)
+                            contentSignature = null   // force the row rebuild, as removeItem does
+                        }
+                    }
+                }
+                .setNegativeButton("Cancel", null)
+                .chorusShow()
         }
 
         renderToggles(null)
@@ -153,6 +174,9 @@ class QueuePanel @JvmOverloads constructor(
 
     private fun syncQueue(player: Player) {
         val count = player.mediaItemCount
+        // There is nothing to clear in an empty queue; hide the button rather than
+        // offer an action that cannot land.
+        clearButton.visibility = if (count > 0) View.VISIBLE else View.GONE
         // Empty state: shown for a genuinely empty queue (or before the first track),
         // regardless of whether the row list itself has changed.
         emptyView.visibility = if (count <= 0) View.VISIBLE else View.GONE

@@ -43,6 +43,23 @@
             android:text="Repeat"
             android:textAllCaps="false"
             android:textSize="13sp" />
+
+        <!-- Hidden while the queue is empty (see QueuePanel.syncQueue): there is
+             nothing to clear, and a button that cannot act should not be there. -->
+        <Button
+            android:id="@+id/queue_clear"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:minHeight="44dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="Clear all"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <TextView
