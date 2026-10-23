@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.7 MB** (1,717,491 bytes) (R8 full mode, English-only locales, resource shrinking). No
+**Release APK: ~1.7 MB** (1,718,027 bytes) (R8 full mode, English-only locales, resource shrinking). No
 Compose, no Material, no DI framework, no analytics, no crash reporting, no ads,
 **no INTERNET permission** — the app cannot phone home even if it wanted to.
 
@@ -112,6 +112,12 @@ Empty screens say so in one friendly line (search, queue, playlists).
 **Track info** — long-press the title in the full-screen player for the file's facts:
 artist, album, disc and track, length, bitrate, codec, size, both timestamps, and the
 path. "Show in folder" jumps the Folders tab to the directory holding that file.
+
+**Back goes back** — the system back gesture steps *out* instead of closing the app:
+up a directory in the Folders tab, out of a playlist detail back to the Lists tab, out of
+any tab to the track list, and out of the full-screen player to the library — even when
+the player was opened straight from the media notification on a cold start. The app only
+closes from the track list, the normal way.
 
 **Setup tab** — the settings that are actually settings: ReplayGain mode, an equaliser
 (off, one of the phone's own presets, or a slider per band), skip distance (5/10/15s),
