@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.7 MB** (1,701,731 bytes) (R8 full mode, English-only locales, resource shrinking). No
+**Release APK: ~1.7 MB** (1,717,491 bytes) (R8 full mode, English-only locales, resource shrinking). No
 Compose, no Material, no DI framework, no analytics, no crash reporting, no ads,
 **no INTERNET permission** — the app cannot phone home even if it wanted to.
 
@@ -109,9 +109,15 @@ the app and updated from the service's player listener. Zero image assets, no po
 
 Empty screens say so in one friendly line (search, queue, playlists).
 
-**Setup tab** — the settings that are actually settings: ReplayGain mode, resume where
-you left off, start shuffled, rescan the music library, cycle mode, and the version and
-licences. Light/dark is *not* among them: the app follows the phone.
+**Track info** — long-press the title in the full-screen player for the file's facts:
+artist, album, disc and track, length, bitrate, codec, size, both timestamps, and the
+path. "Show in folder" jumps the Folders tab to the directory holding that file.
+
+**Setup tab** — the settings that are actually settings: ReplayGain mode, an equaliser
+(off, one of the phone's own presets, or a slider per band), skip distance (5/10/15s),
+resume where you left off, start shuffled, play on connect, restore the queue after a
+reboot, rescan the music library, cycle mode, and the version and licences. Light/dark
+is *not* among them: the app follows the phone.
 
 **Cycle mode** (Setup tab only) — for use on
 a bike. Switches to a high-contrast theme (pure black/white, whichever way round the
