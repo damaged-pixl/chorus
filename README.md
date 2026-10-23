@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.7 MB** (1,718,387 bytes) (R8 full mode, English-only locales, resource shrinking). No
+**Release APK: ~1.7 MB** (1,719,915 bytes) (R8 full mode, English-only locales, resource shrinking). No
 Compose, no Material, no DI framework, no analytics, no crash reporting, no ads,
 **no INTERNET permission** — the app cannot phone home even if it wanted to.
 
@@ -89,6 +89,14 @@ A–Z.
 favourite star: 15/30/45/60 minutes or "end of track". Pauses playback when it fires, shows
 the time remaining while armed, cancels cleanly. In-memory only: it does not survive the
 process being killed.
+
+**Keep and rearrange** — the queue's header gets **Save**, which turns the current queue
+into a real playlist (name it, it appears in the Lists tab; the queue itself keeps
+playing). A long-press on a playlist row now offers **Move up / Move down / Remove**
+instead of deleting outright, so playlists can be reordered by hand — the move swaps
+database positions, so a track added twice moves exactly the copy you pressed. And
+**Favourites** gains its own **Export** button, writing a standard `.m3u8` through the
+system file picker just like a saved playlist.
 
 **Queue editing** — long-press a queue row to move it up/down or remove it, or use
 **Clear all** in the queue's header to empty the whole thing behind one confirmation;
