@@ -325,11 +325,13 @@ class MainActivity : AppCompatActivity() {
         sortButtons = listOf(
             findViewById(R.id.sort_title),
             findViewById(R.id.sort_plays),
-            findViewById(R.id.sort_recent)
+            findViewById(R.id.sort_recent),
+            findViewById(R.id.sort_added)
         )
         sortButtons[SORT_TITLE].setOnClickListener { setSort(SORT_TITLE) }
         sortButtons[SORT_PLAYS].setOnClickListener { setSort(SORT_PLAYS) }
         sortButtons[SORT_RECENT].setOnClickListener { setSort(SORT_RECENT) }
+        sortButtons[SORT_ADDED].setOnClickListener { setSort(SORT_ADDED) }
         updateSortBar()
     }
 
@@ -425,6 +427,19 @@ class MainActivity : AppCompatActivity() {
             SORT_TITLE -> {
                 trackAdapter.submit(library)
                 updateAzRail()
+            }
+            // Date added is already on the row, so unlike the two play-stat sorts this
+            // one needs no stats query — but it still runs off the main thread, because
+            // sorting a few thousand rows is not free either.
+            SORT_ADDED -> runIo {
+                val sorted = library.sortedWith(
+                    compareByDescending<Track> { it.dateAdded }
+                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+                )
+                runOnUiThread {
+                    trackAdapter.submit(sorted)
+                    updateAzRail()
+                }
             }
             else -> runIo {
                 val stats = store.playStats()
@@ -1508,6 +1523,7 @@ class MainActivity : AppCompatActivity() {
         const val SORT_TITLE = 0
         const val SORT_PLAYS = 1
         const val SORT_RECENT = 2
+        const val SORT_ADDED = 3
 
         /** Edge of a playlist row's cover in dp; its mosaic tiles are half that. */
         const val PLAYLIST_COVER_DP = 44
