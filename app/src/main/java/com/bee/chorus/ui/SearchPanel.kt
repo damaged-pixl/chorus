@@ -23,7 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Live search over the whole library.
  *
- * Matching is a plain case-insensitive `contains` against title, artist and album. Typing is
+ * Matching is a plain case-insensitive `contains` against title, artist, album, file name
+ * and folder path. Typing is
  * debounced by [DEBOUNCE_MS], the actual scan runs on one background thread, and results whose
  * generation counter has been superseded are dropped instead of rendered — so a fast typist
  * never sees results from an older keystroke.
@@ -154,11 +155,17 @@ class SearchPanel @JvmOverloads constructor(
         }
     }
 
-    /** Case-insensitive match on title, artist and album. */
+    /**
+     * Case-insensitive match on title, artist and album, plus the file name and its folder.
+     * The last two matter for a local library organised by directory: searching a folder
+     * (or a ripped file's own name) finds what the tags alone cannot.
+     */
     private fun matches(t: Track, needle: String): Boolean =
         t.title.contains(needle, ignoreCase = true) ||
             t.artist.contains(needle, ignoreCase = true) ||
-            t.album.contains(needle, ignoreCase = true)
+            t.album.contains(needle, ignoreCase = true) ||
+            t.path.substringAfterLast('/').contains(needle, ignoreCase = true) ||
+            t.parentPath.contains(needle, ignoreCase = true)
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
