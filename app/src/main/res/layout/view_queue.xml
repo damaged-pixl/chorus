@@ -60,6 +60,23 @@
             android:textAllCaps="false"
             android:textSize="13sp"
             android:visibility="gone" />
+
+        <!-- Keep the queue: same visibility rule as Clear all — an empty queue has
+             nothing to save. -->
+        <Button
+            android:id="@+id/queue_save"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:minHeight="44dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="Save"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <TextView

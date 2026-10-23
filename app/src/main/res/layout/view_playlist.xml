@@ -72,6 +72,24 @@
             android:text="Shuffle all"
             android:textAllCaps="false"
             android:textSize="13sp" />
+
+        <!-- Shown only for Favourites (see PlaylistPanel.updateButtons): a saved
+             playlist already exports through its long-press in the Lists tab, but
+             the pseudo-playlist has no long-press of its own. -->
+        <Button
+            android:id="@+id/playlist_export"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:minHeight="44dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="Export"
+            android:textAllCaps="false"
+            android:textSize="13sp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

@@ -38,6 +38,7 @@ class PlaylistPanel @JvmOverloads constructor(
     private val countView: TextView
     private val playAllButton: Button
     private val shuffleAllButton: Button
+    private val exportButton: Button
     private val listView: RecyclerView
 
     private val adapter = TrackAdapter()
@@ -49,11 +50,21 @@ class PlaylistPanel @JvmOverloads constructor(
     private var playlistName: String = ""
     private var tracks: List<Track> = emptyList()
 
+    /** DB position per row of [tracks] — a playlist's ordering is positional, not by id. */
+    private var positions: List<Int> = emptyList()
+
     /**
      * A long press removes a row; the click that follows must not also start playback, so row
      * clicks are ignored for a moment after a removal.
      */
     private var ignoreClicksUntil = 0L
+
+    /**
+     * Host hook for the Favourites export button (the only export the panel itself shows —
+     * a saved playlist exports through its long-press in the Lists tab, and the SAF picker
+     * belongs to the Activity, not to a view).
+     */
+    var onExportFavourites: (() -> Unit)? = null
 
     init {
         orientation = LinearLayout.VERTICAL
@@ -63,6 +74,7 @@ class PlaylistPanel @JvmOverloads constructor(
         countView = findViewById(R.id.playlist_count)
         playAllButton = findViewById(R.id.playlist_play_all)
         shuffleAllButton = findViewById(R.id.playlist_shuffle_all)
+        exportButton = findViewById(R.id.playlist_export)
         listView = findViewById(R.id.playlist_list)
 
         listView.layoutManager = LinearLayoutManager(context)
@@ -82,7 +94,7 @@ class PlaylistPanel @JvmOverloads constructor(
                 child.setOnLongClickListener {
                     val position = listView.getChildViewHolder(child).bindingAdapterPosition
                     if (position != RecyclerView.NO_POSITION) {
-                        removeAt(position)
+                        showRowOptions(position)
                         true
                     } else {
                         false
@@ -106,6 +118,8 @@ class PlaylistPanel @JvmOverloads constructor(
                 PlayerHolder.play(tracks, 0)
             }
         }
+
+        exportButton.setOnClickListener { onExportFavourites?.invoke() }
 
         refresh()
     }
@@ -178,6 +192,14 @@ class PlaylistPanel @JvmOverloads constructor(
             s == null -> emptyList()
             else -> s.trackIdsIn(playlistId).mapNotNull { library[it] }
         }
+        // Positions ride along for the reorder path; Favourites is a set, so it has none.
+        positions = if (playlistId == FAVOURITES || s == null) {
+            List(tracks.size) { -1 }
+        } else {
+            s.trackRowsIn(playlistId).mapNotNull { (id, pos) ->
+                if (library.containsKey(id)) pos else null
+            }
+        }
 
         countView.text = if (tracks.size == 1) "1 track" else "${tracks.size} tracks"
         adapter.submit(tracks)
@@ -223,6 +245,44 @@ class PlaylistPanel @JvmOverloads constructor(
         if (playlistId == FAVOURITES) refresh()
     }
 
+    /**
+     * Long-press options for one row: reorder or remove — the same vocabulary the queue
+     * rows get. Favourites keeps its old direct un-star instead: it is a set with no
+     * order of its own, so there is nothing to move.
+     */
+    private fun showRowOptions(position: Int) {
+        val track = tracks.getOrNull(position) ?: return
+        if (playlistId == FAVOURITES) {
+            removeAt(position)
+            return
+        }
+        Dialogs.builder(context)
+            .setTitle(track.title)
+            .setItems(arrayOf("Move up", "Move down", "Remove from playlist")) { _, which ->
+                when (which) {
+                    0 -> moveAt(position, -1)
+                    1 -> moveAt(position, 1)
+                    else -> removeAt(position)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .chorusShow()
+    }
+
+    /**
+     * Swap the row at [position] with its neighbour in the direction of [delta] — by DB
+     * position, so a track that appears twice moves exactly the copy that was pressed.
+     * At the top/bottom edge the target row does not exist and the swap is a no-op, which
+     * is why the menu offers both directions unconditionally, as the queue's does.
+     */
+    private fun moveAt(position: Int, delta: Int) {
+        val s = store ?: return
+        val target = position + delta
+        if (playlistId == FAVOURITES || target !in tracks.indices) return
+        s.swapPositions(playlistId, positions[position], positions[target])
+        refresh()
+    }
+
     private fun removeAt(position: Int) {
         val track = tracks.getOrNull(position) ?: return
         if (playlistId == FAVOURITES) {
@@ -245,6 +305,11 @@ class PlaylistPanel @JvmOverloads constructor(
         shuffleAllButton.isEnabled = enabled
         playAllButton.alpha = if (enabled) 1f else DISABLED_ALPHA
         shuffleAllButton.alpha = if (enabled) 1f else DISABLED_ALPHA
+        // Export belongs to Favourites alone: a saved playlist already has Export in its
+        // long-press menu, and there is nothing to export in an empty list.
+        val exportVisible = playlistId == FAVOURITES && enabled
+        exportButton.visibility = if (exportVisible) View.VISIBLE else View.GONE
+        exportButton.isEnabled = exportVisible
     }
 
     companion object {

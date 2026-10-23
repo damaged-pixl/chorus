@@ -197,6 +197,46 @@ class PlaylistStore(context: Context) :
         )
     }
 
+    /**
+     * Swap the two rows sitting at [positionA] and [positionB] in the playlist's ordering.
+     * Positions are swapped, not rowids, so a playlist with gaps (rows removed earlier)
+     * or the same track twice ("Add it again") moves exactly the rows asked for — keying
+     * on track id could not tell two copies apart.
+     */
+    fun swapPositions(playlistId: Long, positionA: Int, positionB: Int) {
+        if (positionA == positionB) return
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val cv = ContentValues()
+            cv.put("position", positionB)
+            db.update(
+                "playlist_tracks", cv, "playlist_id=? AND position=?",
+                arrayOf(playlistId.toString(), positionA.toString())
+            )
+            cv.put("position", positionA)
+            db.update(
+                "playlist_tracks", cv, "playlist_id=? AND position=?",
+                arrayOf(playlistId.toString(), positionB.toString())
+            )
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /** Ordered (track_id, position) rows — the reorder path needs the positions too. */
+    fun trackRowsIn(playlistId: Long): List<Pair<Long, Int>> {
+        val out = ArrayList<Pair<Long, Int>>()
+        readableDatabase.query(
+            "playlist_tracks", arrayOf("track_id", "position"), "playlist_id=?",
+            arrayOf(playlistId.toString()), null, null, "position ASC"
+        ).use { c ->
+            while (c.moveToNext()) out.add(c.getLong(0) to c.getInt(1))
+        }
+        return out
+    }
+
     fun trackIdsIn(playlistId: Long): List<Long> {
         val out = ArrayList<Long>()
         readableDatabase.query(

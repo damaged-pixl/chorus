@@ -34,6 +34,7 @@ class QueuePanel @JvmOverloads constructor(
     private val shuffleButton: Button
     private val repeatButton: Button
     private val clearButton: Button
+    private val saveButton: Button
     private val nowPlaying: TextView
     private val emptyView: TextView
     private val listView: RecyclerView
@@ -55,6 +56,13 @@ class QueuePanel @JvmOverloads constructor(
     /** Changes when the queue contents change; identical signature means "same list". */
     private var contentSignature: String? = null
 
+    /**
+     * Host hook for the Save button: called with the queue's track ids (in queue order)
+     * so the Activity can turn them into a playlist. The panel owns neither the store
+     * nor the naming dialog — same split as every other screen over [PlayerHolder].
+     */
+    var onSaveQueue: ((List<Long>) -> Unit)? = null
+
     // Same instance is handed back to removePlayerListener, which removes by identity.
     private val playerListener: (Player) -> Unit = { player -> render(player) }
 
@@ -65,6 +73,7 @@ class QueuePanel @JvmOverloads constructor(
         shuffleButton = findViewById(R.id.queue_shuffle)
         repeatButton = findViewById(R.id.queue_repeat)
         clearButton = findViewById(R.id.queue_clear)
+        saveButton = findViewById(R.id.queue_save)
         nowPlaying = findViewById(R.id.queue_now_playing)
         emptyView = findViewById(R.id.queue_empty)
         listView = findViewById(R.id.queue_list)
@@ -104,6 +113,20 @@ class QueuePanel @JvmOverloads constructor(
                 }
                 .setNegativeButton("Cancel", null)
                 .chorusShow()
+        }
+
+        // The queue becomes a playlist: the panel only collects the ids (a mediaId is the
+        // MediaStore track id, so no resolution is needed here) and hands them up — the
+        // store, the naming dialog and the refresh all belong to the host, exactly as the
+        // playlist screens keep their database work out of the views.
+        saveButton.setOnClickListener {
+            PlayerHolder.whenReady { c ->
+                val ids = ArrayList<Long>(c.mediaItemCount)
+                for (i in 0 until c.mediaItemCount) {
+                    c.getMediaItemAt(i).mediaId.toLongOrNull()?.let { ids.add(it) }
+                }
+                if (ids.isNotEmpty()) onSaveQueue?.invoke(ids)
+            }
         }
 
         renderToggles(null)
@@ -175,8 +198,9 @@ class QueuePanel @JvmOverloads constructor(
     private fun syncQueue(player: Player) {
         val count = player.mediaItemCount
         // There is nothing to clear in an empty queue; hide the button rather than
-        // offer an action that cannot land.
+        // offer an action that cannot land. Save follows the same rule.
         clearButton.visibility = if (count > 0) View.VISIBLE else View.GONE
+        saveButton.visibility = if (count > 0) View.VISIBLE else View.GONE
         // Empty state: shown for a genuinely empty queue (or before the first track),
         // regardless of whether the row list itself has changed.
         emptyView.visibility = if (count <= 0) View.VISIBLE else View.GONE

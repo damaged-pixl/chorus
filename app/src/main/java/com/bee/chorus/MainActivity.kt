@@ -575,6 +575,15 @@ class MainActivity : AppCompatActivity() {
         folderPanel = findViewById(R.id.folder_panel)
         miniPlayer = findViewById(R.id.mini_player)
 
+        // Favourites exports through the panel's own button; a saved playlist keeps its
+        // long-press Export in the Lists tab. The SAF picker lives here, in the Activity.
+        playlistPanel.onExportFavourites = {
+            startExport(PlaylistPanel.FAVOURITES, "Favourites")
+        }
+        // The queue becomes a playlist through the panel's Save button: name it here,
+        // write it in the store the Lists tab reads, and leave the queue untouched.
+        queuePanel.onSaveQueue = { ids -> saveQueueAsPlaylist(ids) }
+
         // The track list's stars follow the Favourites singleton. Paired with onDestroy
         // below, because this adapter is owned by the Activity, not by a view that can
         // hook its own window attach/detach. Search and playlist panels do the same in
@@ -791,6 +800,39 @@ class MainActivity : AppCompatActivity() {
             .chorusShow()
     }
 
+    /**
+     * Turn the queue into a real playlist: name it, write it, leave the queue alone.
+     * The ids arrive in queue order from the panel's Save button, so the playlist keeps
+     * the order the user arranged — the same ordering addTracks would rebuild anyway.
+     */
+    private fun saveQueueAsPlaylist(ids: List<Long>) {
+        val input = EditText(this).apply {
+            hint = "Playlist name"
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+        Dialogs.builder(this)
+            .setTitle("Save queue")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    runIo {
+                        val id = store.createPlaylist(name)
+                        store.addTracks(id, ids)
+                        runOnUiThread {
+                            refreshPlaylists()
+                            Toast.makeText(
+                                this, "Saved “$name”", Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .chorusShow()
+    }
+
     private fun addTracksTo(playlistId: Long, tracks: List<Track>) {
         runIo {
             store.addTracks(playlistId, tracks.map { it.id })
@@ -921,7 +963,13 @@ class MainActivity : AppCompatActivity() {
         runIo {
             val byId = HashMap<Long, Track>(library.size)
             for (t in library) byId[t.id] = t
-            val tracks = store.trackIdsIn(id).mapNotNull { byId[it] }
+            // Favourites is not a table, so its rows come from the shared set; a real
+            // playlist reads its ordering from the store.
+            val tracks = if (id == PlaylistPanel.FAVOURITES) {
+                Favourites.ids().mapNotNull { byId[it] }
+            } else {
+                store.trackIdsIn(id).mapNotNull { byId[it] }
+            }
             val ok = try {
                 // "wt" truncates: re-exporting over an existing file must not append.
                 contentResolver.openOutputStream(uri, "wt")?.use { out ->
