@@ -6,6 +6,12 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
 /**
+ * Park position for the three-step row swap in [PlaylistStore.swapPositions]. Real
+ * positions start at 0 and only climb, so a negative value can never be a row's own.
+ */
+private const val TEMP_POSITION = -1
+
+/**
  * Local playlists. Plain SQLite (no Room) to keep the build and runtime light.
  * Tracks are referenced by their stable MediaStore id, so nothing is copied.
  *
@@ -202,22 +208,31 @@ class PlaylistStore(context: Context) :
      * Positions are swapped, not rowids, so a playlist with gaps (rows removed earlier)
      * or the same track twice ("Add it again") moves exactly the rows asked for — keying
      * on track id could not tell two copies apart.
+     *
+     * Three steps through a sentinel below zero, not two: after a two-step swap the first
+     * row already sits where the second one is, so the second UPDATE matches them both
+     * and drops the pair at the same position instead of swapping them (seen on the
+     * phone: "Move up" left the list unchanged). Positions are never negative — they
+     * start at 0 in nextPosition — so -1 cannot collide with a real row.
      */
     fun swapPositions(playlistId: Long, positionA: Int, positionB: Int) {
         if (positionA == positionB) return
+        val lo = minOf(positionA, positionB)
+        val hi = maxOf(positionA, positionB)
         val db = writableDatabase
         db.beginTransaction()
         try {
+            val args = arrayOf(playlistId.toString())
             val cv = ContentValues()
-            cv.put("position", positionB)
+            // hi-row out of the way, lo-row up to hi, the parked row down to lo.
+            cv.put("position", TEMP_POSITION)
+            db.update("playlist_tracks", cv, "playlist_id=? AND position=?", args + hi.toString())
+            cv.put("position", hi)
+            db.update("playlist_tracks", cv, "playlist_id=? AND position=?", args + lo.toString())
+            cv.put("position", lo)
             db.update(
                 "playlist_tracks", cv, "playlist_id=? AND position=?",
-                arrayOf(playlistId.toString(), positionA.toString())
-            )
-            cv.put("position", positionA)
-            db.update(
-                "playlist_tracks", cv, "playlist_id=? AND position=?",
-                arrayOf(playlistId.toString(), positionB.toString())
+                args + TEMP_POSITION.toString()
             )
             db.setTransactionSuccessful()
         } finally {
