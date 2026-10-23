@@ -18,6 +18,13 @@ Chorus itself is free software under the GNU General Public License v3. You can 
     <string name="skip_back_desc">Rewind %1$d seconds</string>
     <string name="skip_forward_desc">Forward %1$d seconds</string>
 
+    <!-- The Setup tab's equaliser row and its dialogs. -->
+    <string name="settings_equaliser_title">Equaliser</string>
+    <string name="settings_equaliser_custom">Custom</string>
+    <!-- Shown on the row (and as a toast) when the phone will not let an app open one. -->
+    <string name="settings_equaliser_unavailable">Not available</string>
+    <string name="settings_equaliser_missing">The equaliser isn\'t available on this device</string>
+
     <!-- The Setup tab's skip-distance choice. %1$d is the distance in seconds. -->
     <string name="settings_skip_title">Skip distance</string>
     <string name="settings_skip_value">%1$ds</string>

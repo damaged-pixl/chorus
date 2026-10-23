@@ -11,8 +11,9 @@ import java.util.concurrent.CopyOnWriteArrayList
  * The *user settings* are [KEY_CYCLE_MODE] (the big-target, high-contrast layout),
  * [KEY_REPLAYGAIN_MODE] (off / track / album), [KEY_RESUME_POSITION] (reopen where you
  * left off), [KEY_DEFAULT_SHUFFLE] (start every session shuffled), [KEY_SKIP_SECONDS]
- * (how far the skip buttons jump), [KEY_PLAY_ON_CONNECT] (start on headphones/Bluetooth)
- * and [KEY_RESTORE_ON_BOOT] (bring the queue back after a reboot).
+ * (how far the skip buttons jump), [KEY_PLAY_ON_CONNECT] (start on headphones/Bluetooth),
+ * [KEY_RESTORE_ON_BOOT] (bring the queue back after a reboot) and the equaliser's
+ * [KEY_EQ_ON] / [KEY_EQ_PRESET] / [KEY_EQ_BANDS] trio.
  *
  * Listeners registered via [addListener] are process-wide and fire on every [setCycleMode]
  * call, so a host can react (re-theme, relayout) without polling. They are held strongly:
@@ -52,6 +53,16 @@ object Settings {
     private const val KEY_RESTORE_ON_BOOT = "restore_queue_on_boot"
     private const val DEFAULT_RESTORE_ON_BOOT = false
 
+    // Equaliser. The preset index is a position in *this device's* preset list, which is
+    // what android.media.audiofx hands out; a downgrade or a hand-edited file that lands
+    // outside the list falls back to "Normal" rather than throwing. The custom bands are
+    // millibels, one per band, and are only read when the preset is EQ_CUSTOM.
+    private const val KEY_EQ_ON = "equaliser_on"
+    private const val DEFAULT_EQ_ON = false
+    private const val KEY_EQ_PRESET = "equaliser_preset"
+    private const val DEFAULT_EQ_PRESET = 0
+    private const val KEY_EQ_BANDS = "equaliser_bands"
+
     private const val KEY_SPEED = "playback_speed"
     private const val DEFAULT_SPEED = 1f
 
@@ -69,6 +80,13 @@ object Settings {
      * Activities (re-themed on change), the gain listeners are the playback service.
      */
     private val gainListeners = CopyOnWriteArrayList<(ReplayGainMode) -> Unit>()
+
+    /**
+     * Equaliser listeners. Same strong-listener rule as the two above: the only host is the
+     * playback service, which removes its own in onDestroy. The callback carries nothing —
+     * the whole state is three settings, and the service re-reads them.
+     */
+    private val equaliserListeners = CopyOnWriteArrayList<() -> Unit>()
 
     /**
      * How ReplayGain picks the gain figure for a track. Ordinals are stored in the
@@ -205,6 +223,52 @@ object Settings {
         prefs(ctx).edit().putFloat(KEY_SPEED, value).apply()
     }
 
+    // ------------------------------------------------------------------ equaliser
+
+    /**
+     * Sentinel preset: the saved *bands*, not any of the device's own presets, are what is
+     * applied. Device presets are indexed from 0, so -1 is the one value that cannot be one.
+     */
+    const val EQ_CUSTOM = -1
+
+    /** True when the system equaliser should be doing anything at all. */
+    fun isEqualiserOn(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_EQ_ON, DEFAULT_EQ_ON)
+
+    /** Persist the on/off state; the playback service re-applies through a listener. */
+    fun setEqualiserOn(ctx: Context, on: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_EQ_ON, on).apply()
+        notifyEqualiser()
+    }
+
+    /** The chosen device preset, or [EQ_CUSTOM] for hand-set bands. */
+    fun equaliserPreset(ctx: Context): Int =
+        prefs(ctx).getInt(KEY_EQ_PRESET, DEFAULT_EQ_PRESET)
+
+    fun setEqualiserPreset(ctx: Context, index: Int) {
+        prefs(ctx).edit().putInt(KEY_EQ_PRESET, index).apply()
+        notifyEqualiser()
+    }
+
+    /**
+     * Hand-set band levels in millibels — read only when the preset is [EQ_CUSTOM].
+     *
+     * A comma-joined string rather than a set: SharedPreferences has no int-array call, and
+     * a StringSet would hand the bands back in whatever order it liked, which would quietly
+     * swap a bass shelf onto the treble. Values are small signed integers, so a plain join
+     * round-trips exactly.
+     */
+    fun equaliserBands(ctx: Context): IntArray =
+        prefs(ctx).getString(KEY_EQ_BANDS, "").orEmpty()
+            .split(',')
+            .mapNotNull { it.trim().toIntOrNull() }
+            .toIntArray()
+
+    fun setEqualiserBands(ctx: Context, levels: IntArray) {
+        prefs(ctx).edit().putString(KEY_EQ_BANDS, levels.joinToString(",")).apply()
+        notifyEqualiser()
+    }
+
     // ------------------------------------------------------------------ sleep timer
 
     /**
@@ -252,6 +316,22 @@ object Settings {
     /** Unregister [l]. Safe to call when it was never added. */
     fun removeReplayGainListener(l: (ReplayGainMode) -> Unit) {
         gainListeners.remove(l)
+    }
+
+    // ------------------------------------------------------------------ equaliser listeners
+
+    /** Register [l] for any equaliser setting change. Adding the same instance twice is a no-op. */
+    fun addEqualiserListener(l: () -> Unit) {
+        equaliserListeners.addIfAbsent(l)
+    }
+
+    /** Unregister [l]. Safe to call when it was never added. */
+    fun removeEqualiserListener(l: () -> Unit) {
+        equaliserListeners.remove(l)
+    }
+
+    private fun notifyEqualiser() {
+        for (l in equaliserListeners) l()
     }
 
     private fun notifyCycleMode(value: Boolean) {

@@ -11,6 +11,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.Util
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -62,6 +63,15 @@ class PlaybackService : MediaSessionService() {
     private val gainProvider = ReplayGainProvider()
 
     /**
+     * The system equaliser, attached to whatever audio session the player's sink ends up
+     * with — see [ChorusEqualiser] for why that arrives as a callback rather than a value.
+     */
+    private val equaliser = ChorusEqualiser(this)
+
+    /** A Setup-tab equaliser change re-applies to the session that is playing. */
+    private val equaliserListener: () -> Unit = { equaliser.apply() }
+
+    /**
      * Coalesces queue-persist requests: onEvents fires several times in a burst (pause,
      * transition, mode flip), and each one wants the *latest* position saved, not one
      * write per event. 500 ms of quiet → one write.
@@ -93,6 +103,16 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)   // pause when headphones unplug
             .build()
 
+        // Pick the audio session id here, rather than waiting to be told one. Media3 never
+        // *reports* the sink's own session id — Player.Listener.onAudioSessionIdChanged only
+        // echoes an app's own setAudioSessionId() call — so a service that waits for it
+        // waits forever and the equaliser never attaches. One id, chosen before prepare():
+        // the sink is built on it from the first frame, nothing has to be torn down, and
+        // the equaliser can attach straight away instead of racing the first buffer.
+        val sessionId = Util.generateAudioSessionId(this)
+        player.setAudioSessionId(sessionId)
+        equaliser.attach(sessionId)
+
         // The queue the process had when it died: restored paused (never autoplay), so
         // reopening the app lands on the same track/position/shuffle/repeat as before.
         restoreQueue(player)
@@ -119,6 +139,12 @@ class PlaybackService : MediaSessionService() {
                 applyGain(mediaItem, Settings.replayGainMode(this@PlaybackService))
             }
 
+            // A session id change (our own setAudioSessionId, or a future one) re-hangs the
+            // equaliser: the old effect belongs to the session that has gone away.
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                equaliser.attach(audioSessionId)
+            }
+
             // Home-screen widget. onEvents already covers every state the widget draws
             // (item, isPlaying, queue position), so this one hook replaces a receiver and
             // avoids polling; the existing code above is untouched.
@@ -137,6 +163,8 @@ class PlaybackService : MediaSessionService() {
 
         // A ReplayGain mode change is applied to the current track straight away.
         Settings.addReplayGainListener(gainModeListener)
+        // Same for the equaliser, which is otherwise only applied on a new session.
+        Settings.addEqualiserListener(equaliserListener)
 
         // Play on connect. Seeded from the outputs already present, so the first callback
         // restating them cannot be read as a fresh plug-in. A null handler means "on the
@@ -390,6 +418,10 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         // Settings holds listeners strongly: unhook before the service goes away.
         Settings.removeReplayGainListener(gainModeListener)
+        Settings.removeEqualiserListener(equaliserListener)
+        // The effect is attached to the player's session, so it goes first: releasing the
+        // player underneath a live effect leaves the platform holding a dead session.
+        equaliser.release()
         // Same reasoning, and the same pairing: one registration in onCreate, one removal here.
         audioManager.unregisterAudioDeviceCallback(deviceCallback)
         // Final queue snapshot first, while the player still holds real state: a debounced

@@ -10,9 +10,12 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +35,7 @@ import com.bee.chorus.data.M3u
 import com.bee.chorus.data.PlaylistStore
 import com.bee.chorus.data.Settings
 import com.bee.chorus.data.Track
+import com.bee.chorus.playback.EqualiserCaps
 import com.bee.chorus.playback.PlayerHolder
 import android.graphics.Bitmap
 import com.bee.chorus.ui.AlbumAdapter
@@ -125,6 +129,12 @@ class MainActivity : AppCompatActivity() {
     // shipped with; the others are the same one bar, the same way the Tracks tab works.
     private var albumSort = ALBUM_SORT_ARTIST
     private lateinit var albumSortButtons: List<TextView>
+
+    /**
+     * The device's equaliser capabilities, read once per screen. Null means "this phone
+     * will not let an app open an equaliser", which the row and its tap both answer for.
+     */
+    private var eqCaps: EqualiserCaps? = null
 
     /**
      * Playlist cover bitmaps, keyed by playlist id, each beside the signature (its first
@@ -1141,6 +1151,72 @@ class MainActivity : AppCompatActivity() {
                 .chorusShow()
         }
 
+        // Equaliser: the phone's own effect chain, as one of its presets or hand-set bands.
+        val eqValue = findViewById<TextView>(R.id.settings_equaliser_value)
+        fun showEqualiser() {
+            val caps = eqCaps
+            eqValue.text = when {
+                caps == null -> getString(R.string.settings_equaliser_unavailable)
+                !Settings.isEqualiserOn(this) -> "Off"
+                Settings.equaliserPreset(this) == Settings.EQ_CUSTOM ->
+                    getString(R.string.settings_equaliser_custom)
+                else -> caps.presets.getOrElse(Settings.equaliserPreset(this)) {
+                    caps.presets.firstOrNull() ?: "Off"
+                }
+            }
+        }
+        showEqualiser()
+        // The device's preset names live inside the effect chain and nowhere else, so the
+        // row can only be labelled after one short probe — cached for the screen's life.
+        runIo {
+            val caps = EqualiserCaps.probeCaps()
+            runOnUiThread {
+                eqCaps = caps
+                showEqualiser()
+            }
+        }
+        findViewById<View>(R.id.settings_equaliser).setOnClickListener {
+            val caps = eqCaps
+            if (caps == null) {
+                Toast.makeText(
+                    this, R.string.settings_equaliser_missing, Toast.LENGTH_SHORT
+                ).show()
+                return@setOnClickListener
+            }
+            // One list, because it is one decision: off, a device preset, or the sliders.
+            val labels = ArrayList<String>(caps.presets.size + 2)
+            labels += "Off"
+            labels += caps.presets
+            labels += getString(R.string.settings_equaliser_custom) + "\u2026"
+            val customRow = labels.size - 1
+            val current = when {
+                !Settings.isEqualiserOn(this) -> 0
+                Settings.equaliserPreset(this) == Settings.EQ_CUSTOM -> customRow
+                else -> 1 + Settings.equaliserPreset(this).coerceIn(0, caps.presets.size - 1)
+            }
+            var dialog: AlertDialog? = null
+            dialog = Dialogs.builder(this)
+                .setTitle(R.string.settings_equaliser_title)
+                .setSingleChoiceItems(labels.toTypedArray(), current) { _, which ->
+                    when (which) {
+                        0 -> Settings.setEqualiserOn(this, false)
+                        customRow -> {
+                            // The editor saves for itself; this list just gets out of its way.
+                            dialog?.dismiss()
+                            equaliserBandDialog(caps)
+                        }
+                        else -> {
+                            Settings.setEqualiserPreset(this, which - 1)
+                            Settings.setEqualiserOn(this, true)
+                        }
+                    }
+                    showEqualiser()
+                    if (which != customRow) dialog?.dismiss()
+                }
+                .setNegativeButton("Cancel", null)
+                .chorusShow()
+        }
+
         // Resume position: reopen on the same track at the same point.
         val resumeSwitch = findViewById<SwitchCompat>(R.id.settings_resume_switch)
         resumeSwitch.isChecked = Settings.resumePosition(this)
@@ -1202,6 +1278,87 @@ class MainActivity : AppCompatActivity() {
 
         // About: what the app is, what it is built on, and the licence it ships under.
         findViewById<View>(R.id.settings_about).setOnClickListener { showAbout() }
+    }
+
+    /**
+     * The equaliser's band editor: one slider per band, spanning the range this device
+     * allows.
+     *
+     * Saved as millibels and applied as "custom", which also switches the equaliser on — a
+     * set of sliders you have just set is not a state to leave switched off behind you. The
+     * three writes each tell the service to re-apply, so their order matters: the preset
+     * identity first (so the bands are read as *the* bands), then the levels, then the
+     * switch. On a phone with no equaliser the service simply has nothing to apply to, and
+     * the settings are still saved for the day it does.
+     */
+    private fun equaliserBandDialog(caps: EqualiserCaps) {
+        val saved = Settings.equaliserBands(this)
+        val density = resources.displayMetrics.density
+        val pad = (16 * density).toInt()
+        val labelWidth = (64 * density).toInt()
+
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val bars = ArrayList<SeekBar>(caps.bandCount)
+        for (i in 0 until caps.bandCount) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(pad, 0, pad, 0)
+            }
+            row.addView(
+                TextView(this).apply {
+                    text = caps.bandLabels[i]
+                    textSize = 14f
+                },
+                LinearLayout.LayoutParams(labelWidth, LinearLayout.LayoutParams.WRAP_CONTENT)
+            )
+            val bar = SeekBar(this).apply {
+                max = EQUALISER_SLIDER_STEPS
+                progress = levelToSlider(saved.getOrElse(i) { 0 }, caps)
+            }
+            row.addView(
+                bar,
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            )
+            bars += bar
+            rows.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+
+        Dialogs.builder(this)
+            .setTitle(getString(R.string.settings_equaliser_custom))
+            .setView(rows)
+            .setPositiveButton("Save") { _, _ ->
+                val levels = IntArray(caps.bandCount) { i ->
+                    sliderToLevel(bars[i].progress, caps)
+                }
+                Settings.setEqualiserPreset(this, Settings.EQ_CUSTOM)
+                Settings.setEqualiserBands(this, levels)
+                Settings.setEqualiserOn(this, true)
+                findViewById<TextView>(R.id.settings_equaliser_value)
+                    .setText(R.string.settings_equaliser_custom)
+            }
+            .setNegativeButton("Cancel", null)
+            .chorusShow()
+    }
+
+    /** Millibels -> slider position, inside the range this device allows. */
+    private fun levelToSlider(millibels: Int, caps: EqualiserCaps): Int {
+        val span = (caps.maxMillibels - caps.minMillibels).coerceAtLeast(1)
+        return ((millibels - caps.minMillibels) * EQUALISER_SLIDER_STEPS / span)
+            .coerceIn(0, EQUALISER_SLIDER_STEPS)
+    }
+
+    /** Slider position -> millibels, clamped to what the device said it can do. */
+    private fun sliderToLevel(position: Int, caps: EqualiserCaps): Int {
+        val span = (caps.maxMillibels - caps.minMillibels).coerceAtLeast(1)
+        return (caps.minMillibels + position * span / EQUALISER_SLIDER_STEPS)
+            .coerceIn(caps.minMillibels, caps.maxMillibels)
     }
 
     /**
@@ -1299,6 +1456,9 @@ class MainActivity : AppCompatActivity() {
          * the destination owns the contract.
          */
         const val EXTRA_OPEN_FOLDER = "chorus.open_folder"
+
+        /** Slider travel in the equaliser's band editor, in steps. */
+        const val EQUALISER_SLIDER_STEPS = 100
 
         /** Sort modes for the track list; index into [sortButtons]. */
         const val SORT_TITLE = 0
