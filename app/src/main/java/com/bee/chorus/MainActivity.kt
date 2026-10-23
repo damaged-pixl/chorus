@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -148,6 +149,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var azScroller: AzScroller
     private var activePanel = R.id.track_screen
 
+    /**
+     * Back steps *out* of wherever the user is — up a folder, back to the home tab — and
+     * only leaves the app from the track screen, where there is nothing left to step out
+     * of. Enabled per [show]; see [stepBack] for the actual ladder.
+     */
+    private lateinit var backStep: OnBackPressedCallback
+
     // Sort-bar tints, resolved in wireSortBar() rather than as field initialisers: the
     // theme is not final until onCreate has had its say (CycleMode.applyTheme runs first),
     // and a field initialiser would read the manifest theme instead.
@@ -195,6 +203,7 @@ class MainActivity : AppCompatActivity() {
         wireTabs()
         wireCycle()
         wireSettings()
+        wireBack()
 
         findViewById<View>(android.R.id.content).post {
             CycleMode.apply(findViewById(android.R.id.content), cycle)
@@ -1398,6 +1407,9 @@ class MainActivity : AppCompatActivity() {
     /** Show one content view, hide the rest of the top-level panels. */
     private fun show(target: Int) {
         activePanel = target
+        // Back has somewhere to step out of everywhere except the track screen (see
+        // stepBack); there the system handles it and the app leaves the normal way.
+        backStep.isEnabled = target != R.id.track_screen
         val panels = listOf(
             R.id.track_screen, R.id.album_screen, R.id.folder_panel, R.id.playlist_home,
             R.id.playlist_panel, R.id.search_panel, R.id.queue_panel, R.id.settings_panel
@@ -1416,6 +1428,38 @@ class MainActivity : AppCompatActivity() {
             // playlist created or deleted elsewhere is never stale on screen.
             refreshPlaylists()
         }
+    }
+
+    /**
+     * The back ladder, one step per press: a folder first (up a directory, like the
+     * breadcrumb), then whatever detail screen is up back to the tab it belongs to, then
+     * any tab back to the home track screen, and only from there does the app leave —
+     * which is what [backStep]'s enabled flag tracks, so at home the system gets the
+     * back event itself (and its predictive-back animation) exactly as before.
+     */
+    private fun wireBack() {
+        backStep = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() = stepBack()
+        }
+        onBackPressedDispatcher.addCallback(this, backStep)
+    }
+
+    private fun stepBack() {
+        // Folders walk up a level, exactly like tapping the parent crumb.
+        if (activePanel == R.id.folder_panel && folderPanel.goUp()) return
+        // A playlist detail screen belongs to the Lists tab — one step back to it.
+        if (activePanel == R.id.playlist_panel) {
+            show(R.id.playlist_home)
+            return
+        }
+        // Queue (the player's way in) and every tab land on the home track screen.
+        if (activePanel != R.id.track_screen) {
+            show(R.id.track_screen)
+            return
+        }
+        // Nothing left to step out of; the enabled flag keeps this unreachable in
+        // practice, but leaving it as "then leave" makes the ladder total.
+        finish()
     }
 
     /**

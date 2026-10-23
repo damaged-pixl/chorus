@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -84,6 +85,21 @@ class PlayerActivity : AppCompatActivity() {
         findViewById<View>(android.R.id.content).post {
             CycleMode.apply(findViewById(android.R.id.content), cycle)
         }
+
+        // Back, only when this screen is the task's root: the media notification's tap on
+        // a cold task starts the player with no library behind it, and the default
+        // finish() there drops the user at the launcher — "back" should show the library.
+        // Opened from the app (the usual case) the callback stays disabled, so the system
+        // finishes the screen itself, predictive-back animation and all.
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(isTaskRoot) {
+                override fun handleOnBackPressed() {
+                    startActivity(Intent(this@PlayerActivity, MainActivity::class.java))
+                    finish()
+                }
+            },
+        )
 
         // Added after the first read of the setting so restoring it on create is not
         // mistaken for the user changing it.

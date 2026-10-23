@@ -104,6 +104,24 @@ class FolderPanel @JvmOverloads constructor(
     }
 
     /**
+     * Step up one directory — back's companion to the breadcrumb, so the system back
+     * gesture walks the tree exactly like tapping a parent crumb. Returns false when
+     * already at [root], so the host knows there was no level to give and can take its
+     * own next step instead (the panel itself is then just a tab).
+     */
+    fun goUp(): Boolean {
+        if (current == root) return false
+        // A root of "" (no common prefix) still means "never above the top": the missing
+        // delimiter falls back to root, and the length guard catches a root the current
+        // path only shares a prefix with.
+        current = if (current.isEmpty()) root else current.substringBeforeLast('/', root)
+        if (current.length < root.length) current = root
+        refresh()
+        listView.scrollToPosition(0)
+        return true
+    }
+
+    /**
      * MediaStore id of the track the shared player holds, or null. Pushed down by the
      * host (the same value the track list gets); folder rows are not affected.
      */
