@@ -197,6 +197,14 @@ class MainActivity : AppCompatActivity() {
         if (intent?.getBooleanExtra(EXTRA_OPEN_QUEUE, false) == true) {
             show(R.id.queue_panel)
         }
+
+        // A track's info sheet asks to be shown where its file lives. Same two-place rule
+        // as the queue extra for the same reason: the player may fire this at a screen
+        // that is already up.
+        intent?.getStringExtra(EXTRA_OPEN_FOLDER)?.takeIf { it.isNotEmpty() }?.let { path ->
+            show(R.id.folder_panel)
+            folderPanel.openPath(path)
+        }
     }
 
     /**
@@ -210,6 +218,10 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         if (intent.getBooleanExtra(EXTRA_OPEN_QUEUE, false)) {
             show(R.id.queue_panel)
+        }
+        intent.getStringExtra(EXTRA_OPEN_FOLDER)?.takeIf { it.isNotEmpty() }?.let { path ->
+            show(R.id.folder_panel)
+            folderPanel.openPath(path)
         }
     }
 
@@ -1280,6 +1292,13 @@ class MainActivity : AppCompatActivity() {
          * defines the contract, and PlayerPanel's companion is private.
          */
         const val EXTRA_OPEN_QUEUE = "chorus.open_queue"
+
+        /**
+         * Intent extra: open this screen on the folder holding this file path. Set by the
+         * full-screen player's track info sheet — "Show in folder". Like the queue extra,
+         * the destination owns the contract.
+         */
+        const val EXTRA_OPEN_FOLDER = "chorus.open_folder"
 
         /** Sort modes for the track list; index into [sortButtons]. */
         const val SORT_TITLE = 0

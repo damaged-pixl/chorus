@@ -118,6 +118,17 @@ class PlayerPanel @JvmOverloads constructor(
     private val mutedText: Int
     private val onStrongPillText: Int
 
+    /**
+     * Set by the host (the full-screen player): fired with the current mediaId when the
+     * track title is long-pressed, which is the door to that track's info sheet. A
+     * view-held lambda rather than a Settings-style listener, so unlike those it needs no
+     * unhooking — it dies with the view that holds it.
+     */
+    var onTrackInfo: ((String) -> Unit)? = null
+
+    /** MediaId of the item on screen, kept so the title's long-press has something to hand back. */
+    private var currentMediaId: String? = null
+
     private var attached = false
     private var scrubbing = false
     private var previewShown = false
@@ -524,7 +535,10 @@ class PlayerPanel @JvmOverloads constructor(
         // notification/lock-screen speed change without any extra listener.
         renderSpeed(player.playbackParameters.speed)
 
-        val metadata = player.currentMediaItem?.mediaMetadata
+        val item = player.currentMediaItem
+        currentMediaId = item?.mediaId
+
+        val metadata = item?.mediaMetadata
 
         val title = metadata?.title?.toString().orEmpty()
         titleView.text = title.ifEmpty { NOTHING_PLAYING }
@@ -907,6 +921,14 @@ class PlayerPanel @JvmOverloads constructor(
                 player.seekTo((player.currentPosition - skipMs).coerceAtLeast(0L))
             }
         }
+        // The screen-reader labels are set from the same setting as the taps: the XML
+        // ships a fixed "10 seconds", which was a lie the moment the distance changed.
+        // Re-set on every wire-up, and each panel is wired per player open, so a change
+        // in Setup is announced correctly on the next time the player is on screen.
+        rewindButton.contentDescription =
+            context.getString(R.string.skip_back_desc, Settings.skipSeconds(context))
+        forwardButton.contentDescription =
+            context.getString(R.string.skip_forward_desc, Settings.skipSeconds(context))
 
         forwardButton.setOnClickListener {
             val skipMs = Settings.skipSeconds(context) * 1000L
@@ -949,6 +971,14 @@ class PlayerPanel @JvmOverloads constructor(
         sleepButton.setOnClickListener { sleepDialog() }
 
         lyricsButton.setOnClickListener { setLyricsOpen(!lyricsOpen) }
+
+        // Long-press the title for the file's details. The title, and not a button: every
+        // control on this screen has a job already, and track info is a look, not a
+        // control — the one place left that is about the *track* rather than playback.
+        titleView.setOnLongClickListener {
+            currentMediaId?.let { id -> onTrackInfo?.invoke(id) }
+            true
+        }
 
         // Hand back to the main screen's queue tab. The full-screen player has no queue
         // view of its own (the queue is one list over the shared controller, kept on the

@@ -3,7 +3,30 @@ package com.bee.chorus.data
 import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
+import android.os.Build
 import android.provider.MediaStore
+
+/**
+ * One file's facts, as MediaStore reports them — the raw material for the info sheet.
+ * Numbers stay raw (seconds, bytes, bits per second): formatting is the screen's job.
+ */
+data class TrackFacts(
+    val title: String,
+    val artist: String,
+    val album: String,
+    val year: Int,
+    val trackNo: Int,
+    val durationMs: Int,
+    /** Bits per second; 0 where the platform has no such column (API 28 and below). */
+    val bitrate: Int,
+    val sizeBytes: Long,
+    val mime: String?,
+    /** MediaStore DATE_ADDED / DATE_MODIFIED, in seconds since epoch; 0 when unknown. */
+    val dateAddedSec: Long,
+    val dateModifiedSec: Long,
+    /** Absolute path — what "Show in folder" hands back to the folder browser. */
+    val path: String,
+)
 
 /**
  * Reads the on-device audio library from MediaStore.
@@ -14,6 +37,66 @@ class LibraryReader(private val context: Context) {
 
     // DATA is deprecated but still populated; the suppression is only for reading it
     // (see the projection comment — folder browse and M3U need real file paths).
+    /**
+     * Everything MediaStore knows about one file — the player's info sheet, read on demand.
+     *
+     * The library scan deliberately does not carry these fields: bitrate, size, MIME and
+     * the timestamps are dead weight on every row of every list, and are wanted on one
+     * screen only. Null when MediaStore has no row for the id (a file deleted since the
+     * last scan). A column this release does not have (bitrate arrived in API 29) comes
+     * back as 0 rather than failing the read, and the sheet simply omits that line.
+     */
+    @Suppress("DEPRECATION")   // DATA again: this sheet is about the file on disk.
+    fun trackFacts(id: Long): TrackFacts? {
+        val all = arrayOf(
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.YEAR,
+            MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.BITRATE,
+            MediaStore.Audio.Media.SIZE,
+            MediaStore.Audio.Media.MIME_TYPE,
+            MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.DATE_MODIFIED,
+            MediaStore.Audio.Media.DATA,
+        )
+        // Asking an older platform for a column it has never heard of fails the whole
+        // query, so the projection is trimmed to what the release actually has.
+        val projection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) all
+        else all.filter { it != MediaStore.Audio.Media.BITRATE }.toTypedArray()
+
+        var out: TrackFacts? = null
+        context.contentResolver.query(
+            Library.TRACKS_URI, projection, "_id=?", arrayOf(id.toString()), null
+        )?.use { c ->
+            if (!c.moveToFirst()) return@use
+            // Every column is nullable in principle (and BITRATE genuinely is), so each
+            // read answers for itself instead of trusting moveToFirst.
+            fun text(name: String) = c.getColumnIndex(name).takeIf { it >= 0 && !c.isNull(it) }
+                ?.let { c.getString(it) }
+            fun number(name: String) = c.getColumnIndex(name).takeIf { it >= 0 && !c.isNull(it) }
+                ?.let { c.getLong(it) } ?: 0L
+
+            out = TrackFacts(
+                title = text(MediaStore.Audio.Media.TITLE).orEmpty(),
+                artist = text(MediaStore.Audio.Media.ARTIST).orEmpty(),
+                album = text(MediaStore.Audio.Media.ALBUM).orEmpty(),
+                year = number(MediaStore.Audio.Media.YEAR).toInt(),
+                trackNo = number(MediaStore.Audio.Media.TRACK).toInt(),
+                durationMs = number(MediaStore.Audio.Media.DURATION).toInt(),
+                bitrate = number(MediaStore.Audio.Media.BITRATE).toInt(),
+                sizeBytes = number(MediaStore.Audio.Media.SIZE),
+                mime = text(MediaStore.Audio.Media.MIME_TYPE),
+                dateAddedSec = number(MediaStore.Audio.Media.DATE_ADDED),
+                dateModifiedSec = number(MediaStore.Audio.Media.DATE_MODIFIED),
+                path = text(MediaStore.Audio.Media.DATA).orEmpty(),
+            )
+        }
+        return out
+    }
+
     @Suppress("DEPRECATION")
     fun loadTracks(): List<Track> {
         val out = ArrayList<Track>()

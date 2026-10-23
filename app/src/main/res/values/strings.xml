@@ -13,6 +13,11 @@ Built on AndroidX (core, appcompat, RecyclerView) and Media3, all under the Apac
 
 Chorus itself is free software under the GNU General Public License v3. You can read the licence below, and the full source is in the repository.</string>
 
+    <!-- The player's skip buttons, for screen readers. %1$d is the distance in seconds;
+         set from Settings at wire-up because the layout's fixed text goes stale. -->
+    <string name="skip_back_desc">Rewind %1$d seconds</string>
+    <string name="skip_forward_desc">Forward %1$d seconds</string>
+
     <!-- The Setup tab's skip-distance choice. %1$d is the distance in seconds. -->
     <string name="settings_skip_title">Skip distance</string>
     <string name="settings_skip_value">%1$ds</string>
