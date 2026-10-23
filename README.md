@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.7 MB** (1,718,027 bytes) (R8 full mode, English-only locales, resource shrinking). No
+**Release APK: ~1.7 MB** (1,718,387 bytes) (R8 full mode, English-only locales, resource shrinking). No
 Compose, no Material, no DI framework, no analytics, no crash reporting, no ads,
 **no INTERNET permission** — the app cannot phone home even if it wanted to.
 
@@ -82,15 +82,17 @@ browse entry above "+ New playlist"; long-press inside it to un-star.
 
 **Play counts** — every track change increments a `play_stats` row (counted once per
 real transition, never on resume or seek), and the track list can be sorted by
-**Most played** or **Recently played** alongside A–Z.
+**Most played**, **Recently played** or **Recently added** (newest files first) alongside
+A–Z.
 
 **Sleep timer** — in the full player, in the mode row beside shuffle, repeat and the
 favourite star: 15/30/45/60 minutes or "end of track". Pauses playback when it fires, shows
 the time remaining while armed, cancels cleanly. In-memory only: it does not survive the
 process being killed.
 
-**Queue editing** — long-press a queue row to move it up/down or remove it; the edit
-goes through the shared MediaController so the lock screen sees the same queue.
+**Queue editing** — long-press a queue row to move it up/down or remove it, or use
+**Clear all** in the queue's header to empty the whole thing behind one confirmation;
+edits go through the shared MediaController so the lock screen sees the same queue.
 
 **Lyrics** — the lyrics control in the full player's time row swaps the artwork square
 for a read-only lyric sheet. Sources, in order: an ID3v2 USLT/SYLT tag inside the file,
