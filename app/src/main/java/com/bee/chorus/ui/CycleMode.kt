@@ -50,6 +50,8 @@ object CycleMode {
         val minWidth: Int,
         val minHeight: Int,
         val textSizePx: Float,
+        val width: Int,
+        val height: Int,
     )
 
     // ------------------------------------------------------------------ touch targets
@@ -96,7 +98,10 @@ object CycleMode {
             if (interactive) {
                 if (view.minimumWidth < bigPx) view.minimumWidth = bigPx.toInt()
                 if (view.minimumHeight < bigPx) view.minimumHeight = bigPx.toInt()
-                if (!inTabStrip) scaleText(view, before, TEXT_SCALE)
+                if (!inTabStrip) {
+                    enforceLayoutTarget(view, bigPx)
+                    scaleText(view, before, TEXT_SCALE)
+                }
             } else {
                 if (!inTabStrip) scaleText(view, before, ROOT_TEXT_SCALE)
             }
@@ -104,11 +109,46 @@ object CycleMode {
             val before = originals.remove(view) ?: return
             view.minimumWidth = before.minWidth
             view.minimumHeight = before.minHeight
+            // Both zero means the params were absent at capture (or two weighted axes,
+            // which nothing here has) — leave whatever is there alone.
+            val lp = view.layoutParams
+            if (lp != null && (before.width != 0 || before.height != 0)) {
+                lp.width = before.width
+                lp.height = before.height
+                view.requestLayout()
+            }
             if (view is TextView) {
                 // PX unit throughout so the view's own scaledDensity factor is never applied twice.
                 view.setTextSize(TypedValue.COMPLEX_UNIT_PX, before.textSizePx)
             }
         }
+    }
+
+    /**
+     * minimumWidth/minimumHeight only reach the measure pass when the parent measures the
+     * view loosely (wrap_content / at_most). A fixed dp in a layout is measured EXACTLY and
+     * wins — which is how the full player's controls stayed gloved-finger small (40–52dp in
+     * view_player.xml) however large the minimum got, even though the layout was budgeted
+     * for exactly this (every row's comment counts in 72dp targets). So raise the layout
+     * params as well: the layout's own sizes must obey the same promise as the minimum.
+     *
+     * Zero is the weight idiom (0dp + layout_weight) and the negatives are match_parent /
+     * wrap_content: neither is touched, so a weighted row keeps splitting its axis exactly
+     * as drawn and match_parent targets are left to the minimum above.
+     */
+    private fun enforceLayoutTarget(view: View, bigPx: Float) {
+        val lp = view.layoutParams ?: return
+        val big = bigPx.toInt()
+        var changed = false
+        if (lp.width in 1 until big) {
+            lp.width = big
+            changed = true
+        }
+        if (lp.height in 1 until big) {
+            lp.height = big
+            changed = true
+        }
+        if (changed) view.requestLayout()
     }
 
     private fun isInTabStrip(view: View): Boolean {
@@ -131,6 +171,8 @@ object CycleMode {
         view.minimumWidth,
         view.minimumHeight,
         if (view is TextView) view.textSize else 0f,
+        view.layoutParams?.width ?: 0,
+        view.layoutParams?.height ?: 0,
     ).also { originals[view] = it }
 
     // ------------------------------------------------------------------ theme
