@@ -41,6 +41,7 @@ import com.bee.chorus.playback.PlayerHolder
 import android.graphics.Bitmap
 import com.bee.chorus.ui.AlbumAdapter
 import com.bee.chorus.ui.Art
+import com.bee.chorus.ui.ArtistPanel
 import com.bee.chorus.ui.AzScroller
 import com.bee.chorus.ui.CycleMode
 import com.bee.chorus.ui.CycleToggle
@@ -69,6 +70,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var searchPanel: SearchPanel
     private lateinit var queuePanel: QueuePanel
     private lateinit var folderPanel: FolderPanel
+    private lateinit var artistPanel: ArtistPanel
     private lateinit var miniPlayer: MiniPlayer
     private lateinit var cycleToggle: CycleToggle
 
@@ -349,6 +351,17 @@ class MainActivity : AppCompatActivity() {
         albumSortButtons[ALBUM_SORT_ARTIST].setOnClickListener { setAlbumSort(ALBUM_SORT_ARTIST) }
         albumSortButtons[ALBUM_SORT_YEAR].setOnClickListener { setAlbumSort(ALBUM_SORT_YEAR) }
         albumSortButtons[ALBUM_SORT_ADDED].setOnClickListener { setAlbumSort(ALBUM_SORT_ADDED) }
+        // The Artists door: hands the panel the albums in the *current* sort order (so an
+        // artist's albums come up in whatever order the tab is showing) and swaps the
+        // panel *over* the album list — the album screen goes down so only one list is on
+        // screen (the same rule as every other panel pair). activePanel stays
+        // album_screen, so the Albums tab stays lit and back steps out of the overlay
+        // first (see stepBack); show() tears the overlay down on any top-level switch.
+        findViewById<TextView>(R.id.album_artists).setOnClickListener {
+            artistPanel.setLibrary(albums)
+            findViewById<View>(R.id.album_screen).visibility = View.GONE
+            artistPanel.visibility = View.VISIBLE
+        }
         updateAlbumSortBar()
     }
 
@@ -573,7 +586,15 @@ class MainActivity : AppCompatActivity() {
         searchPanel = findViewById(R.id.search_panel)
         queuePanel = findViewById(R.id.queue_panel)
         folderPanel = findViewById(R.id.folder_panel)
+        artistPanel = findViewById(R.id.artist_panel)
         miniPlayer = findViewById(R.id.mini_player)
+
+        // The artist panel plays an album exactly as the Albums tab does: the album's own
+        // tracks, in track order, from the top. Same shared player, no second path.
+        artistPanel.onAlbumClick = { album ->
+            val albumTracks = library.filter { it.albumId == album.id }.sortedBy { it.trackNo }
+            if (albumTracks.isNotEmpty()) PlayerHolder.play(albumTracks, 0)
+        }
 
         // Favourites exports through the panel's own button; a saved playlist keeps its
         // long-press Export in the Lists tab. The SAF picker lives here, in the Activity.
@@ -1474,8 +1495,9 @@ class MainActivity : AppCompatActivity() {
         // stepBack); there the system handles it and the app leaves the normal way.
         backStep.isEnabled = target != R.id.track_screen
         val panels = listOf(
-            R.id.track_screen, R.id.album_screen, R.id.folder_panel, R.id.playlist_home,
-            R.id.playlist_panel, R.id.search_panel, R.id.queue_panel, R.id.settings_panel
+            R.id.track_screen, R.id.album_screen, R.id.artist_panel, R.id.folder_panel,
+            R.id.playlist_home, R.id.playlist_panel, R.id.search_panel, R.id.queue_panel,
+            R.id.settings_panel
         )
         for (id in panels) {
             val v: View = findViewById(id)
@@ -1508,6 +1530,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stepBack() {
+        // The artist panel overlays the Albums tab: back first steps up one artist level
+        // (to the artist list), then show(album_screen) brings the album list back —
+        // which also tears the overlay down, since it is not a switchable panel.
+        if (activePanel == R.id.album_screen && artistPanel.visibility == View.VISIBLE) {
+            if (artistPanel.goUp()) return
+            show(R.id.album_screen)
+            return
+        }
         // Folders walk up a level, exactly like tapping the parent crumb.
         if (activePanel == R.id.folder_panel && folderPanel.goUp()) return
         // A playlist detail screen belongs to the Lists tab — one step back to it.

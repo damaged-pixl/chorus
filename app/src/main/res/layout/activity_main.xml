@@ -331,6 +331,25 @@
                 android:paddingEnd="8dp"
                 android:paddingTop="6dp"
                 android:paddingBottom="6dp">
+
+                <!-- Opens the artist browse (a full-screen list over this tab). Placed
+                     ahead of the sort buttons and given its own divider so it reads as a
+                     different kind of control — a door, not a sort. -->
+                <TextView
+                    android:id="@+id/album_artists"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
+                    android:text="Artists"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="12sp" />
+
                 <TextView
                     android:id="@+id/album_sort_title"
                     android:layout_width="wrap_content"
@@ -401,6 +420,15 @@
                 android:paddingBottom="8dp"
                 android:scrollbars="vertical" />
         </LinearLayout>
+
+        <!-- Artist browse, opened from the Albums tab's Artists door. A peer screen to
+             the album list (not a child of it), so it hides the album screen entirely and
+             the back ladder steps out of it to the album list, then out of that. -->
+        <com.bee.chorus.ui.ArtistPanel
+            android:id="@+id/artist_panel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
 
         <com.bee.chorus.ui.FolderPanel
             android:id="@+id/folder_panel"

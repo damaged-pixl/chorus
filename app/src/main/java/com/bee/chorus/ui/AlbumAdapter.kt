@@ -15,6 +15,18 @@ import com.bee.chorus.R
 import com.bee.chorus.data.Album
 
 /**
+ * One artist on the [ArtistPanel] root list: a display name and how many albums they have.
+ * Lives here so the artist rows reuse [item_album]'s shape (64dp art, title, subtitle)
+ * through the same adapter, rather than a near-duplicate row type. [artAlbum] is the
+ * album whose artwork stands in for the artist — the first of theirs the panel hands over.
+ */
+data class ArtistRow(
+    val name: String,
+    val albumCount: Int,
+    val artAlbum: Album
+)
+
+/**
  * RecyclerView adapter for the album list.
  *
  * Rows come from `R.layout.item_album` (64dp rounded art, bold album title,
@@ -26,28 +38,47 @@ import com.bee.chorus.data.Album
  *
  * Bind path discipline: no I/O, no decoding, no listener objects. The click listener
  * and the artwork shape are built once per recycled ViewHolder.
+ *
+ * It serves the artist list too: [submitArtists] switches it to [ArtistRow] rows, whose
+ * click fires [onArtistClick] instead of [onClick].
  */
 class AlbumAdapter(
     var onClick: ((Album) -> Unit)? = null,
-    var onLongClick: ((Album) -> Unit)? = null
+    var onLongClick: ((Album) -> Unit)? = null,
+    var onArtistClick: ((ArtistRow) -> Unit)? = null
 ) : RecyclerView.Adapter<AlbumAdapter.VH>() {
 
     private val items = ArrayList<Album>()
+    private var artists: List<ArtistRow> = emptyList()
 
-    /** Replace the contents and rebind. */
+    /** Replace the album contents and rebind (artist rows are cleared). */
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Album>) {
         items.clear()
         items.addAll(list)
+        artists = emptyList()
         notifyDataSetChanged()
     }
 
-    override fun getItemCount(): Int = items.size
+    /** Replace the artist contents and rebind (album rows are cleared). */
+    @SuppressLint("NotifyDataSetChanged")
+    fun submitArtists(list: List<ArtistRow>) {
+        artists = list
+        items.clear()
+        notifyDataSetChanged()
+    }
+
+    override fun getItemCount(): Int = if (artists.isNotEmpty()) artists.size else items.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
         VH(LayoutInflater.from(parent.context).inflate(R.layout.item_album, parent, false))
 
-    override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(items[position])
+    override fun onBindViewHolder(holder: VH, position: Int) {
+        // Two row shapes over one layout: an artist (when submitArtists was last used)
+        // or an album. Decided by which list is populated, so no view-type juggling.
+        if (artists.isNotEmpty()) holder.bindArtist(artists[position])
+        else items.getOrNull(position)?.let { holder.bind(it) }
+    }
 
     inner class VH(view: View) : RecyclerView.ViewHolder(view) {
         private val art: ImageView = view.findViewById(R.id.art)
@@ -66,7 +97,15 @@ class AlbumAdapter(
             // than items[p] — a stale index is a no-op instead of an exception.
             itemView.setOnClickListener {
                 val p = bindingAdapterPosition
-                if (p != RecyclerView.NO_POSITION) items.getOrNull(p)?.let { onClick?.invoke(it) }
+                if (p == RecyclerView.NO_POSITION) return@setOnClickListener
+                // Artist rows are up when submitArtists was last used; they fire the
+                // artist callback, albums the album one. Long-press is albums-only.
+                val artist = artists.getOrNull(p)
+                if (artist != null) {
+                    onArtistClick?.invoke(artist)
+                } else {
+                    items.getOrNull(p)?.let { onClick?.invoke(it) }
+                }
             }
             // Set once like the click listener; returns the bound Album at gesture time.
             itemView.setOnLongClickListener {
@@ -90,6 +129,18 @@ class AlbumAdapter(
             subtitle.visibility = if (detail.isEmpty()) View.GONE else View.VISIBLE
 
             Art.load(itemView.context, art, a.artUri, ART_PX, lowMem = true)
+        }
+
+        /** Artist row: their name as the title, album count as the subtitle, first
+         *  album's art as the stand-in. Same row shape as an album, by design. */
+        fun bindArtist(row: ArtistRow) {
+            title.text = row.name
+            subtitle.text = when (row.albumCount) {
+                1 -> "1 album"
+                else -> "${row.albumCount} albums"
+            }
+            subtitle.visibility = View.VISIBLE
+            Art.load(itemView.context, art, row.artAlbum.artUri, ART_PX, lowMem = true)
         }
     }
 
