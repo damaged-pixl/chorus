@@ -47,6 +47,17 @@ class PlaylistPanel @JvmOverloads constructor(
     private var library: Map<Long, Track> = emptyMap()
 
     private var playlistId: Long = NO_PLAYLIST
+
+    /** Album mode's rows, supplied by the host — no DB row backs them, so they cannot
+     *  be re-read from the store; [refresh] re-submits this list as-is. */
+    private var albumTracks: List<Track> = emptyList()
+
+    /**
+     * Album mode's long-press: the panel has nothing to reorder or delete there (the
+     * album lives in MediaStore, not our DB), so the host decides what the gesture means —
+     * MainActivity points it at the same add-to-playlist chooser every other screen uses.
+     */
+    var onAlbumRowLongPress: ((Track) -> Unit)? = null
     private var playlistName: String = ""
     private var tracks: List<Track> = emptyList()
 
@@ -164,6 +175,19 @@ class PlaylistPanel @JvmOverloads constructor(
         refresh()
     }
 
+    /**
+     * Show an *album*'s tracks in this panel: the third virtual mode after Favourites —
+     * a view over a list the host already resolved (album detail, from the Albums tab's
+     * long-press). Play/Shuffle/tap all work because they only ever read [tracks]; there
+     * is no playlist row, so moving/removing is offered nowhere and Export stays hidden.
+     */
+    fun openAlbum(name: String, tracks: List<Track>) {
+        playlistId = ALBUM
+        playlistName = name
+        albumTracks = tracks
+        refresh()
+    }
+
     /** Clear the panel back to its empty state (no playlist selected). */
     fun close() {
         playlistId = NO_PLAYLIST
@@ -189,11 +213,15 @@ class PlaylistPanel @JvmOverloads constructor(
             // Favourites read through the shared facade (its in-memory set is always
             // ahead of the async database write a star tap just queued).
             playlistId == FAVOURITES -> Favourites.ids().mapNotNull { library[it] }
+            // Album rows were handed in whole; resolving against the library again could
+            // only drop rows (album id vs track id), so submit them untouched.
+            playlistId == ALBUM -> albumTracks
             s == null -> emptyList()
             else -> s.trackIdsIn(playlistId).mapNotNull { library[it] }
         }
-        // Positions ride along for the reorder path; Favourites is a set, so it has none.
-        positions = if (playlistId == FAVOURITES || s == null) {
+        // Positions ride along for the reorder path; Favourites is a set and albums are
+        // not ours, so neither has any.
+        positions = if (playlistId == FAVOURITES || playlistId == ALBUM || s == null) {
             List(tracks.size) { -1 }
         } else {
             s.trackRowsIn(playlistId).mapNotNull { (id, pos) ->
@@ -256,6 +284,12 @@ class PlaylistPanel @JvmOverloads constructor(
             removeAt(position)
             return
         }
+        if (playlistId == ALBUM) {
+            // Nothing here is reorderable or removable — the album is MediaStore's, not
+            // ours. Hand the row to the host (add to playlist), same as every list screen.
+            onAlbumRowLongPress?.invoke(track)
+            return
+        }
         Dialogs.builder(context)
             .setTitle(track.title)
             .setItems(arrayOf("Move up", "Move down", "Remove from playlist")) { _, which ->
@@ -315,6 +349,12 @@ class PlaylistPanel @JvmOverloads constructor(
     companion object {
         /** Sentinel id used while no playlist is selected. */
         const val NO_PLAYLIST = -1L
+
+        /**
+         * Synthetic id for album mode. Real ids come from AUTOINCREMENT (positive) and
+         * Favourites takes -2, so -3 cannot collide.
+         */
+        const val ALBUM = -3L
 
         /**
          * Synthetic id for the Favourites pseudo-playlist. Real playlist ids come from

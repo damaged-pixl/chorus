@@ -155,6 +155,14 @@ class MainActivity : AppCompatActivity() {
     private var activePanel = R.id.track_screen
 
     /**
+     * Where [R.id.playlist_panel] steps *back* to. It hosts two screens that belong to
+     * different tabs — a Lists tab playlist (→ [R.id.playlist_home]) and an album detail
+     * opened from the Albums tab (→ [R.id.album_screen]) — and only the opener knows
+     * which. Set on every open, read once by stepBack.
+     */
+    private var playlistBackTarget: Int = R.id.playlist_home
+
+    /**
      * Back steps *out* of wherever the user is — up a folder, back to the home tab — and
      * only leaves the app from the track screen, where there is nothing left to step out
      * of. Enabled per [show]; see [stepBack] for the actual ladder.
@@ -609,6 +617,11 @@ class MainActivity : AppCompatActivity() {
 
         // Favourites exports through the panel's own button; a saved playlist keeps its
         // long-press Export in the Lists tab. The SAF picker lives here, in the Activity.
+        // Album-mode rows: nothing to reorder or delete there, so a long press is the
+        // same add-to-playlist chooser every other list screen offers.
+        playlistPanel.onAlbumRowLongPress = { track ->
+            addToPlaylistDialog(listOf(track))
+        }
         playlistPanel.onExportFavourites = {
             startExport(PlaylistPanel.FAVOURITES, "Favourites")
         }
@@ -708,13 +721,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openPlaylist(id: Long, name: String) {
+        playlistBackTarget = R.id.playlist_home
         playlistPanel.open(id, name)
         show(R.id.playlist_panel)
     }
 
     private fun openFavourites() {
+        playlistBackTarget = R.id.playlist_home
         playlistPanel.openFavourites()
         show(R.id.playlist_panel)
+    }
+
+    /**
+     * Album detail: the album's tracks in the playlist panel's album mode, reached from
+     * the Albums tab's long-press. Tap-to-play on the album itself is unchanged — this is
+     * the door for *looking* before committing (and Shuffle all shuffles just this album).
+     * Back returns to the Albums tab, not Lists, hence the explicit [playlistBackTarget].
+     */
+    private fun openAlbumDetail(album: Album) {
+        val tracks = library.filter { it.albumId == album.id }.sortedBy { it.trackNo }
+        if (tracks.isEmpty()) return
+        playlistBackTarget = R.id.album_screen
+        playlistPanel.openAlbum(album.title, tracks)
+        show(R.id.playlist_panel)
+        // show() lit the Lists tab (playlist_panel's tab); this detail belongs to Albums.
+        highlightTab(R.id.tab_albums)
     }
 
     // ---------- playlist editing ----------
@@ -732,12 +763,13 @@ class MainActivity : AppCompatActivity() {
     private fun albumOptionsDialog(album: Album) {
         Dialogs.builder(this)
             .setTitle(album.title)
-            .setItems(arrayOf("Add to playlist", "Show in folder")) { _, which ->
+            .setItems(arrayOf("Album detail", "Add to playlist", "Show in folder")) { _, which ->
                 // Same ordering the click-to-play uses, so the playlist matches play order.
                 val tracks = library.filter { it.albumId == album.id }.sortedBy { it.trackNo }
                 when (which) {
-                    0 -> addToPlaylistDialog(tracks)
-                    1 -> {
+                    0 -> openAlbumDetail(album)
+                    1 -> addToPlaylistDialog(tracks)
+                    2 -> {
                         val path = tracks.firstOrNull()?.parentPath
                         if (path != null) {
                             show(R.id.folder_panel)
@@ -1578,9 +1610,10 @@ class MainActivity : AppCompatActivity() {
         }
         // Folders walk up a level, exactly like tapping the parent crumb.
         if (activePanel == R.id.folder_panel && folderPanel.goUp()) return
-        // A playlist detail screen belongs to the Lists tab — one step back to it.
+        // A playlist detail steps back to whichever tab opened it: Lists for a saved
+        // playlist, Albums for an album detail (see playlistBackTarget).
         if (activePanel == R.id.playlist_panel) {
-            show(R.id.playlist_home)
+            show(playlistBackTarget)
             return
         }
         // Queue (the player's way in) and every tab land on the home track screen.
