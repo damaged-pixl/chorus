@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.7 MB** (1,723,419 bytes) (R8 full mode, English-only locales, resource shrinking). No
+**Release APK: ~1.7 MB** (1,727,115 bytes) (R8 full mode, English-only locales, resource shrinking). No
 Compose, no Material, no DI framework, no analytics, no crash reporting, no ads,
 **no INTERNET permission** — the app cannot phone home even if it wanted to.
 
@@ -89,6 +89,16 @@ A–Z.
 favourite star: 15/30/45/60 minutes or "end of track". Pauses playback when it fires, shows
 the time remaining while armed, cancels cleanly. In-memory only: it does not survive the
 process being killed.
+
+**Share to Chorus** — any app that can share an audio file can hand it straight to
+Chorus: the share sheet offers it for audio (and the `application/octet-stream` that
+download managers mislabel their audio as), the file is copied into
+`Music/Chorus Shared/` and classified immediately, and one dialog asks **Play now**
+(inserted after the current track, so the queue survives), **Add to queue** (which
+never starts playback on its own), or **Close**. Works from a cold process. Chorus
+still never fetches anything itself — no INTERNET permission — it only ever copies a
+file another app on the phone already has. Video shares are not offered: this is an
+audio player.
 
 **Artists** — the Albums tab's sort bar opens with an **Artists** door into a two-level
 browse: every artist with their album count (art from their first record), and one
