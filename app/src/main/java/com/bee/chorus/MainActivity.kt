@@ -1,6 +1,7 @@
 package com.bee.chorus
 
 import android.Manifest
+import android.content.ContentUris
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
@@ -9,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.View
@@ -1121,6 +1123,33 @@ class MainActivity : AppCompatActivity() {
         val docId = try {
             DocumentsContract.getDocumentId(uri)
         } catch (e: Exception) {
+            return null
+        }
+        // Downloads-root picks hand back a MediaStore file id ("msf:67462") instead of a
+        // path-shaped one — no slash, not "primary:" — which used to fall through to
+        // null and silently broke every *relative* entry in a playlist chosen from
+        // Downloads (the most common place for them: matched=0, nothing imported).
+        // The id is a real file row: ask MediaStore where it lives.
+        if (!docId.contains('/') && !docId.startsWith("primary:")) {
+            val mediaId = docId.substringAfter(':', "").takeIf {
+                docId.contains(':') && it.isNotEmpty() && it.all { ch -> ch.isDigit() }
+            }?.toLong()
+            if (mediaId != null) {
+                @Suppress("DEPRECATION") // DATA: the only column that carries the path
+                val path = try {
+                    contentResolver.query(
+                        ContentUris.withAppendedId(
+                            Uri.parse("content://media/external/file"), mediaId
+                        ),
+                        arrayOf(MediaStore.MediaColumns.DATA), null, null, null
+                    )?.use { c ->
+                        if (c.moveToFirst()) c.getString(0) else null
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+                if (path != null) return path.substringBeforeLast('/')
+            }
             return null
         }
         val parent = when {
