@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.7 MB** (1,719,915 bytes) (R8 full mode, English-only locales, resource shrinking). No
+**Release APK: ~1.7 MB** (1,723,419 bytes) (R8 full mode, English-only locales, resource shrinking). No
 Compose, no Material, no DI framework, no analytics, no crash reporting, no ads,
 **no INTERNET permission** — the app cannot phone home even if it wanted to.
 
@@ -89,6 +89,11 @@ A–Z.
 favourite star: 15/30/45/60 minutes or "end of track". Pauses playback when it fires, shows
 the time remaining while armed, cancels cleanly. In-memory only: it does not survive the
 process being killed.
+
+**Artists** — the Albums tab's sort bar opens with an **Artists** door into a two-level
+browse: every artist with their album count (art from their first record), and one
+artist's albums underneath behind a tappable breadcrumb. Back steps out one level at a
+time, exactly like the Folders tree.
 
 **Keep and rearrange** — the queue's header gets **Save**, which turns the current queue
 into a real playlist (name it, it appears in the Lists tab; the queue itself keeps
