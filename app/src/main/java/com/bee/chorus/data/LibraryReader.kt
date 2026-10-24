@@ -3,6 +3,7 @@ package com.bee.chorus.data
 import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
+import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 
@@ -100,30 +101,39 @@ class LibraryReader(private val context: Context) {
     @Suppress("DEPRECATION")
     fun loadTracks(): List<Track> {
         val out = ArrayList<Track>()
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.TRACK,
-            MediaStore.Audio.Media.YEAR,
-            MediaStore.Audio.Media.DATE_ADDED,
-            // DATA (file path). Deprecated since API 29 but still populated by
-            // MediaProvider for every row, and the folder browser plus M3U
-            // import/export need the real location (matching entries by path, writing
-            // them out again). Playback deliberately still uses the content:// URI.
-            MediaStore.Audio.Media.DATA
-        )
-        // Only real music files, skip podcasts/short clips/ringtones.
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        val order = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
-
         context.contentResolver.query(
-            Library.TRACKS_URI, projection, selection, null, order
+            Library.TRACKS_URI, PROJECTION, SELECTION, null, ORDER
         )?.use { c -> readTracks(c, out) }
         return out
+    }
+
+    /**
+     * One row by its content [uri] — the share import resolving the file it just wrote.
+     * Same projection and [SELECTION] as [loadTracks], so the resulting [Track] cannot
+     * differ from what the library list will show (a row that fails `is_music` here
+     * would be invisible there, and handing back a Track the lists deny is exactly how
+     * "it played once, then vanished" bugs are born).
+     */
+    fun trackFor(uri: Uri): Track? {
+        val out = ArrayList<Track>(1)
+        context.contentResolver.query(uri, PROJECTION, SELECTION, null, null)
+            ?.use { c -> readTracks(c, out) }
+        return out.firstOrNull()
+    }
+
+    /**
+     * One row by absolute file path — the pre-29 share import, whose row is born from
+     * [android.media.MediaScannerConnection.scanFile] against a path rather than an
+     * insert. Same [SELECTION] reasoning as [trackFor].
+     */
+    @Suppress("DEPRECATION") // DATA is the point of this lookup; it is the path index
+    fun trackAt(path: String): Track? {
+        val out = ArrayList<Track>(1)
+        context.contentResolver.query(
+            Library.TRACKS_URI, PROJECTION, "$SELECTION AND ${MediaStore.Audio.Media.DATA} = ?",
+            arrayOf(path), null
+        )?.use { c -> readTracks(c, out) }
+        return out.firstOrNull()
     }
 
     /** Reads DATA alongside the live columns — see the [loadTracks] suppression note. */
@@ -255,5 +265,30 @@ class LibraryReader(private val context: Context) {
             // Album-level artist is a refinement; never let it fail the album list.
         }
         return out
+    }
+
+    private companion object {
+        @Suppress("DEPRECATION") // DATA lives here once now — see loadTracks' old note
+        private val PROJECTION = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.YEAR,
+            MediaStore.Audio.Media.DATE_ADDED,
+            // DATA (file path). Deprecated since API 29 but still populated by
+            // MediaProvider for every row, and the folder browser plus M3U
+            // import/export need the real location (matching entries by path, writing
+            // them out again). Playback deliberately still uses the content:// URI.
+            MediaStore.Audio.Media.DATA
+        )
+
+        /** Only real music files, skip podcasts/short clips/ringtones. */
+        private val SELECTION = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+
+        private val ORDER = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
     }
 }

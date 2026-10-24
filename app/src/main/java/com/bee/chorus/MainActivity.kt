@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bee.chorus.data.Album
 import com.bee.chorus.data.Favourites
+import com.bee.chorus.data.Library
 import com.bee.chorus.data.LibraryReader
 import com.bee.chorus.data.M3u
 import com.bee.chorus.data.PlaylistStore
@@ -527,6 +528,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // A share import may have landed while another app was in front: re-read once
+        // so the file is in the lists immediately, then clear the flag (read-and-clear
+        // here so a share during *this* resume still gets picked up by the next one).
+        if (Library.dirty) {
+            Library.dirty = false
+            loadLibrary()
+            return
+        }
         // Plays counted while another screen (or the notification) was in front can
         // change the stats-backed orders; re-sort so returning to the list is current.
         if (sortMode != SORT_TITLE) applySort()

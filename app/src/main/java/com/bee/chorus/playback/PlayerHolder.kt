@@ -120,6 +120,44 @@ object PlayerHolder {
         }
     }
 
+    /**
+     * Play [tracks] *now* without discarding what is queued: the items are inserted
+     * immediately after the current one and playback hops to them, so the queue the user
+     * built (and the shuffle order behind it) carries on when these finish. Empty player:
+     * there is no "after", so they simply become the queue.
+     *
+     * This is the share sheet's "Play now" — the polite counterpart of [play], which
+     * replaces everything.
+     */
+    fun playNow(tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        whenReady { c ->
+            val items = tracks.map { it.asMediaItem() }
+            val at = if (c.mediaItemCount == 0) 0 else c.currentMediaItemIndex + 1
+            c.addMediaItems(at, items)
+            c.seekTo(at, 0L)
+            c.prepare()
+            c.play()
+        }
+    }
+
+    /**
+     * Append [tracks] to the end of the queue without touching what is playing. An idle
+     * player (nothing ever queued, or the queue was cleared) gets prepared but not
+     * started: "add to queue" must never begin playback on its own, but the items must
+     * be ready for the play button the moment it is pressed.
+     */
+    fun enqueue(tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        whenReady { c ->
+            c.addMediaItems(c.mediaItemCount, tracks.map { it.asMediaItem() })
+            if (c.playbackState == Player.STATE_IDLE) {
+                c.playWhenReady = false
+                c.prepare()
+            }
+        }
+    }
+
     fun toggleShuffle() {
         controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
     }

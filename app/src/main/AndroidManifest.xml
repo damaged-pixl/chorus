@@ -8,6 +8,12 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Share-to-Chorus on API 26–28 only: writing into shared Music needs it there.
+         API 29+ contributes through the MediaStore insert with no permission at all,
+         and the manifest cap keeps it off every modern install. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -39,6 +45,32 @@
         <activity
             android:name=".PlayerActivity"
             android:exported="false" />
+
+        <!-- "Share to Chorus": audio files another app already holds (browser download,
+             messenger attachment, file manager) offered into the library. audio/* only —
+             Chorus is audio players, not video — and application/octet-stream too,
+             because download managers routinely mislabel their audio. The window is
+             translucent (Theme.Chorus.Translucent): only the choice dialog appears,
+             over whatever app shared. No INTERNET permission backs this: the bytes come
+             from the sending app's Uri, never from a network this app cannot reach. -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Chorus.Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+        </activity>
 
         <service
             android:name=".playback.PlaybackService"
