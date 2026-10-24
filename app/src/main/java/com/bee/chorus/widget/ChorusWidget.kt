@@ -6,6 +6,8 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.RemoteViews
 import androidx.media3.common.Player
@@ -55,16 +57,47 @@ class ChorusWidget : AppWidgetProvider() {
         // would, and the action runs as soon as it is ready.
         PlayerHolder.bind(app)
         PlayerHolder.whenReady { player ->
-            if (player.mediaItemCount == 0) return@whenReady
-            when (action) {
-                ACTION_PREV -> if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem()
-                ACTION_NEXT -> if (player.hasNextMediaItem()) player.seekToNextMediaItem()
-                else -> if (player.isPlaying) player.pause() else player.play()
+            if (player.mediaItemCount > 0) {
+                perform(action, player)
+                return@whenReady
             }
+            // Cold start: the controller connects before PlaybackService.restoreQueue has
+            // re-read the queue (an async DB read on the service's own executor). The old
+            // guard bailed here, which silently DROPPED the tap — the process spawned, the
+            // restore landed paused afterwards, and the widget's play did nothing until a
+            // second press (observed exactly this way on 2026-10-25). Wait for the queue:
+            // this listener fires on the restore's player events, acts once, and removes
+            // itself. The timeout is the belt for the never-restores case (an empty queue
+            // raises no events), so the listener cannot outlive its usefulness.
+            // Nullable two-step: a local val cannot name itself in its own initializer.
+            var waiter: ((Player) -> Unit)? = null
+            waiter = { p ->
+                if (p.mediaItemCount > 0) {
+                    waiter?.let { PlayerHolder.removePlayerListener(it) }
+                    perform(action, p)
+                }
+            }
+            waiter?.let { PlayerHolder.addPlayerListener(it) }
+            val pending = waiter
+            Handler(Looper.getMainLooper()).postDelayed(
+                { pending?.let { PlayerHolder.removePlayerListener(it) } }, RESTORE_WAIT_MS
+            )
+        }
+    }
+
+    /** One transport press, given a player that definitely has a queue. */
+    private fun perform(action: String, player: Player) {
+        when (action) {
+            ACTION_PREV -> if (player.hasPreviousMediaItem()) player.seekToPreviousMediaItem()
+            ACTION_NEXT -> if (player.hasNextMediaItem()) player.seekToNextMediaItem()
+            else -> if (player.isPlaying) player.pause() else player.play()
         }
     }
 
     companion object {
+
+        /** How long a cold-start press waits for restoreQueue before giving up. */
+        private const val RESTORE_WAIT_MS = 10_000L
 
         private const val ACTION_PREV = "com.bee.chorus.widget.PREV"
         private const val ACTION_TOGGLE = "com.bee.chorus.widget.TOGGLE"
