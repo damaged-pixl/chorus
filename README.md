@@ -3,7 +3,7 @@
 A deliberately tiny, fully local music player for Android. It plays audio already on
 the phone. Nothing else.
 
-**Release APK: ~1.7 MB** (1,727,115 bytes) (R8 full mode, English-only locales, resource shrinking). No
+**Release APK: ~1.7 MB** (1,732,307 bytes) (R8 full mode, English-only locales, resource shrinking). No
 Compose, no Material, no DI framework, no analytics, no crash reporting, no ads,
 **no INTERNET permission** — the app cannot phone home even if it wanted to.
 
@@ -136,7 +136,11 @@ Empty screens say so in one friendly line (search, queue, playlists).
 
 **Track info** — long-press the title in the full-screen player for the file's facts:
 artist, album, disc and track, length, bitrate, codec, size, both timestamps, and the
-path. "Show in folder" jumps the Folders tab to the directory holding that file.
+path. **Edit tags** right there fixes the metadata of an MP3 — title, artist, album,
+year — prefilled from the file's own ID3 frames. The write is strictly in-place: a new
+value must fit the existing frame, or it is refused rather than shifting bytes around;
+the system's own file-consent dialog gates every write, and only MP3 (ID3v2.3/2.4) is
+offered. "Show in folder" jumps the Folders tab to the directory holding that file.
 
 **Back goes back** — the system back gesture steps *out* instead of closing the app:
 up a directory in the Folders tab, out of a playlist detail back to the Lists tab, out of
