@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
+import android.media.MediaScannerConnection
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.View
@@ -70,14 +71,13 @@ class PlayerActivity : AppCompatActivity() {
             Toast.makeText(this, "Tag edit cancelled", Toast.LENGTH_SHORT).show()
             return@registerForActivityResult
         }
-        if (pending == null) return@registerForActivityResult
-        val refused = Id3Tags.writeTagsInPlace(pending.path, Id3Tags.Tags(pending.title, pending.artist, pending.album, pending.year))
-        if (refused.isEmpty()) {
-            Library.dirty = true
-            Toast.makeText(this, "Tags updated", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "New value too long to write in place", Toast.LENGTH_SHORT).show()
+        if (pending == null) {
+            // Rotation while the system consent sheet was up: this instance never saw
+            // the edit. Fail loudly rather than silently doing nothing.
+            Toast.makeText(this, "Tag edit lost — please try again", Toast.LENGTH_SHORT).show()
+            return@registerForActivityResult
         }
+        applyTagEdit(pending)
     }
 
     private val keepAwakeListener: (Player) -> Unit = { player ->
@@ -304,14 +304,8 @@ class PlayerActivity : AppCompatActivity() {
                         null
                     }
                     if (pi == null) {
-                        val refused = Id3Tags.writeTagsInPlace(path, Id3Tags.Tags(pending.title, pending.artist, pending.album, pending.year))
                         pendingTagEdit = null
-                        if (refused.isEmpty()) {
-                            Library.dirty = true
-                            Toast.makeText(this, "Tags updated", Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(this, "New value too long to write in place", Toast.LENGTH_SHORT).show()
-                        }
+                        applyTagEdit(pending)
                     } else {
                         writeConsentLauncher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
                     }
@@ -322,6 +316,36 @@ class PlayerActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .chorusShow()
+    }
+
+    /**
+     * One tag write, whichever door led here (consent result, or the pre-R direct path).
+     * After a successful write the MediaStore row is *stale* — its TITLE/ARTIST/ALBUM were
+     * extracted from the old bytes — so Library.dirty alone would re-read old text; the
+     * per-file scanner is what pulls the new tags into MediaStore (and with it the lists,
+     * the queue rows and the notification). scanFile is async and does not block the toast.
+     */
+    private fun applyTagEdit(pending: PendingTagEdit) {
+        val refused = Id3Tags.writeTagsInPlace(
+            pending.path,
+            Id3Tags.Tags(pending.title, pending.artist, pending.album, pending.year)
+        )
+        if (refused.isEmpty()) {
+            MediaScannerConnection.scanFile(
+                this, arrayOf(pending.path), arrayOf("audio/mpeg"), null
+            )
+            Library.dirty = true
+            Toast.makeText(this, "Tags updated", Toast.LENGTH_SHORT).show()
+        } else {
+            // All four refused at once means the file could not be opened for writing
+            // (permission/parse) rather than one value overflowing its frame.
+            Toast.makeText(
+                this,
+                if (refused.size == 4) "Couldn't update the tags"
+                else "New value too long to write in place",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     /** 3:45, 12:03, 1:02:03 — a track's length as a player says it. */

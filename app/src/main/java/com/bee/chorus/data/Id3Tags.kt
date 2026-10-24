@@ -126,6 +126,19 @@ object Id3Tags {
                         pos++
                         continue
                     }
+                    // Format flags set means the frame's *data layout* is transformed —
+                    // compressed, encrypted, grouped (v2.3) or length-prefixed (v2.4's
+                    // data-length indicator). Writing raw text over a transformed frame
+                    // corrupts it, and decoding it as plain text would misplace the edit;
+                    // mainstream encoders never set these on text frames, so skipping to
+                    // the next frame (which then refuses the field as "missing") is the
+                    // honest answer.
+                    if (fh[9] != 0.toByte()) {
+                        val skipSize = if (version == Version.V24) syncSafeInt(fh, 4) else beInt(fh, 4)
+                        pos = if (skipSize > 0) pos + FRAME_HEADER_SIZE + skipSize
+                              else pos + FRAME_HEADER_SIZE
+                        continue
+                    }
                     val frameDataSize = if (version == Version.V24) syncSafeInt(fh, 4) else beInt(fh, 4)
                     if (frameDataSize <= 0) {
                         pos += FRAME_HEADER_SIZE
@@ -167,6 +180,17 @@ object Id3Tags {
     fun writeTagsInPlace(path: String, newTags: Tags): List<String> {
         val refused = ArrayList<String>()
         val info = readTagInfo(path) ?: return listOf("title", "artist", "album", "year")
+        // Global unsynchronisation (v2.3 bit 7, v2.4 bit 1 of the header flags) bit-stuffs
+        // every frame's data — the parser above reads it as raw bytes, so any frame it
+        // "found" may sit at the wrong offset. Writing there would corrupt the tag, so the
+        // only safe answer for an unsync'd tag is refusal. (LAME and every mainstream
+        // encoder leave this off; it exists for damaged-stream protection.)
+        val unsync = if (info.version == Version.V23) {
+            (info.headerFlags.toInt() and 0x80) != 0
+        } else {
+            (info.headerFlags.toInt() and 0x02) != 0
+        }
+        if (unsync) return listOf("title", "artist", "album", "year")
         return try {
             RandomAccessFile(path, "rw").use { raf ->
                 // Try to update existing frames
