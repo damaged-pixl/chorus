@@ -1,16 +1,25 @@
 package com.bee.chorus
 
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.View
 import android.view.WindowManager
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.Player
-import android.widget.Toast
+import com.bee.chorus.data.Id3Tags
+import com.bee.chorus.data.Library
 import com.bee.chorus.data.LibraryReader
 import com.bee.chorus.data.Settings
 import com.bee.chorus.playback.PlayerHolder
@@ -40,6 +49,36 @@ class PlayerActivity : AppCompatActivity() {
 
     private var panel: PlayerPanel? = null
     private var cycle = false
+    private var pendingTagEdit: PendingTagEdit? = null
+
+    private data class PendingTagEdit(
+        val mediaId: Long,
+        val path: String,
+        val uri: android.net.Uri,
+        val title: String,
+        val artist: String,
+        val album: String,
+        val year: String
+    )
+
+    private val writeConsentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val pending = pendingTagEdit
+        pendingTagEdit = null
+        if (result.resultCode != RESULT_OK) {
+            Toast.makeText(this, "Tag edit cancelled", Toast.LENGTH_SHORT).show()
+            return@registerForActivityResult
+        }
+        if (pending == null) return@registerForActivityResult
+        val refused = Id3Tags.writeTagsInPlace(pending.path, Id3Tags.Tags(pending.title, pending.artist, pending.album, pending.year))
+        if (refused.isEmpty()) {
+            Library.dirty = true
+            Toast.makeText(this, "Tags updated", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "New value too long to write in place", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private val keepAwakeListener: (Player) -> Unit = { player ->
         if (player.isPlaying) {
@@ -190,12 +229,15 @@ class PlayerActivity : AppCompatActivity() {
                 Dialogs.builder(this)
                     .setTitle(facts.title.ifEmpty { getString(R.string.app_name) })
                     .setMessage(rows.joinToString("\n"))
-                    .setPositiveButton("Show in folder") { _, _ ->
+                    .setPositiveButton("Edit tags") { _, _ ->
+                        openTagEditDialog(id, facts)
+                    }
+                    .setNeutralButton("Show in folder") { _, _ ->
                         // openPath takes a *directory* (the album row passes parentPath too,
                         // and a file path there lists an empty folder) — so the sheet's file
                         // path loses its last component before it travels.
                         val folder = facts.path.substringBeforeLast('/', "")
-                        if (folder.isEmpty()) return@setPositiveButton
+                        if (folder.isEmpty()) return@setNeutralButton
                         startActivity(
                             Intent(this, MainActivity::class.java)
                                 .putExtra(MainActivity.EXTRA_OPEN_FOLDER, folder)
@@ -211,6 +253,75 @@ class PlayerActivity : AppCompatActivity() {
                     .chorusShow()
             }
         }
+    }
+
+    private fun openTagEditDialog(mediaId: Long, facts: com.bee.chorus.data.TrackFacts) {
+        val path = facts.path
+        if (path.isBlank()) {
+            Toast.makeText(this, "Tag editing is supported for MP3 files only", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!Id3Tags.isMp3(path)) {
+            Toast.makeText(this, "Tag editing is supported for MP3 files only", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val parsed = Id3Tags.readTags(path)
+        val ctx = this
+        val layout = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (16 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad / 2, pad, pad / 2)
+        }
+        val tTitle = EditText(ctx).apply { hint = "Title"; setText(parsed?.title?.ifEmpty { facts.title } ?: facts.title) }
+        val tArtist = EditText(ctx).apply { hint = "Artist"; setText(parsed?.artist?.ifEmpty { facts.artist } ?: facts.artist) }
+        val tAlbum = EditText(ctx).apply { hint = "Album"; setText(parsed?.album?.ifEmpty { facts.album } ?: facts.album) }
+        val tYear = EditText(ctx).apply { hint = "Year"; setText(parsed?.year?.ifEmpty { if (facts.year > 0) facts.year.toString() else "" } ?: if (facts.year > 0) facts.year.toString() else "") }
+        layout.addView(tTitle)
+        layout.addView(tArtist)
+        layout.addView(tAlbum)
+        layout.addView(tYear)
+
+        Dialogs.builder(this)
+            .setTitle("Edit tags")
+            .setView(layout)
+            .setPositiveButton("Save") { _, _ ->
+                val uri = android.content.ContentUris.withAppendedId(Library.TRACKS_URI, mediaId)
+                val pending = PendingTagEdit(
+                    mediaId = mediaId,
+                    path = path,
+                    uri = uri,
+                    title = tTitle.text.toString(),
+                    artist = tArtist.text.toString(),
+                    album = tAlbum.text.toString(),
+                    year = tYear.text.toString()
+                )
+                pendingTagEdit = pending
+                try {
+                    val pi = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        MediaStore.createWriteRequest(contentResolver, listOf(uri))
+                    } else {
+                        // For older APIs, try direct write if we have permission/context
+                        null
+                    }
+                    if (pi == null) {
+                        val refused = Id3Tags.writeTagsInPlace(path, Id3Tags.Tags(pending.title, pending.artist, pending.album, pending.year))
+                        pendingTagEdit = null
+                        if (refused.isEmpty()) {
+                            Library.dirty = true
+                            Toast.makeText(this, "Tags updated", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(this, "New value too long to write in place", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        writeConsentLauncher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
+                    }
+                } catch (e: Exception) {
+                    pendingTagEdit = null
+                    Toast.makeText(this, "Tag edit cancelled", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .chorusShow()
     }
 
     /** 3:45, 12:03, 1:02:03 — a track's length as a player says it. */
