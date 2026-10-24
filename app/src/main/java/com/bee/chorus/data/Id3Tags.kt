@@ -376,17 +376,8 @@ object Id3Tags {
             (b[off + 3].toInt() and 0xFF)
     }
 
-    private fun putSyncSafe(b: ByteArray, off: Int, value: Int) {
-        b[off] = ((value shr 21) and 0x7F).toByte()
-        b[off + 1] = ((value shr 14) and 0x7F).toByte()
-        b[off + 2] = ((value shr 7) and 0x7F).toByte()
-        b[off + 3] = (value and 0x7F).toByte()
-    }
 
-    private fun putBeInt(b: ByteArray, off: Int, value: Int) {
-        b[off] = ((value shr 24) and 0xFF).toByte()
-        b[off + 1] = ((value shr 16) and 0xFF).toByte()
-        b[off + 2] = ((value shr 8) and 0xFF).toByte()
-        b[off + 3] = (value and 0xFF).toByte()
-    }
+    // Deliberately no header writers: a frame's size field is never rewritten here.
+    // Values fit the existing frame or the edit is refused, and an unchanged header
+    // size means the tag region can never shift — that is the whole safety argument.
 }
