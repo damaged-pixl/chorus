@@ -295,6 +295,7 @@ class MainActivity : AppCompatActivity() {
         runIo {
             val reader = LibraryReader(this)
             val tracks = reader.loadTracks()
+            android.util.Log.d("ChorusLib", "loaded=${tracks.size} hasId67549=${tracks.any { it.id == 67549L }} titleMatch=${tracks.filter { it.title.contains("tag", true) }.map { it.id to it.title to it.path }}")
             val albums = reader.loadAlbums(tracks)
             runOnUiThread {
                 library = tracks
